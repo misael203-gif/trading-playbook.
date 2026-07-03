@@ -16,13 +16,13 @@ st.markdown("---")
 st.header("1. Live Charts")
 
 # Single input controls both charts
-ticker = st.text_input("Ticker Symbol", "AAPL").upper()
+ticker = st.text_input("Ticker Symbol", "CWD").upper()
 
 # --- Daily Chart ---
 st.subheader("Daily Chart")
 tv_daily_html = f"""
-<div class="tradingview-widget-container">
-  <div id="tv_daily"></div>
+<div class="tradingview-widget-container" style="height: 550px; width: 100%;">
+  <div id="tv_daily" style="height: 100%; width: 100%;"></div>
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
   <script type="text/javascript">
   new TradingView.widget({{
@@ -40,8 +40,8 @@ tv_daily_html = f"""
   </script>
 </div>
 """
-# Height set to 400px for a clean mobile view
-components.html(tv_daily_html, height=400)
+# Height set to 550px for large mobile view
+components.html(tv_daily_html, height=550)
 
 # --- Intraday Chart ---
 st.subheader("Intraday Chart")
@@ -51,8 +51,8 @@ interval_map = {"1 Minute": "1", "5 Minute": "5", "15 Minute": "15", "30 Minute"
 interval = interval_map[timeframe]
 
 tv_intraday_html = f"""
-<div class="tradingview-widget-container">
-  <div id="tv_intraday"></div>
+<div class="tradingview-widget-container" style="height: 550px; width: 100%;">
+  <div id="tv_intraday" style="height: 100%; width: 100%;"></div>
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
   <script type="text/javascript">
   new TradingView.widget({{
@@ -70,7 +70,7 @@ tv_intraday_html = f"""
   </script>
 </div>
 """
-components.html(tv_intraday_html, height=400)
+components.html(tv_intraday_html, height=550)
 
 st.markdown("---")
 
