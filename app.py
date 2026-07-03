@@ -75,9 +75,25 @@ components.html(tv_intraday_html, height=550)
 st.markdown("---")
 
 # ==========================================
-# SECTION 2: PLAYBOOK CHECKLIST (100 PTS)
+# SECTION 2: TRADER DISCIPLINE CHECK
 # ==========================================
-st.header("2. Playbook Criteria Checklist")
+st.header("2. Discipline Check")
+distraction_check = st.radio(
+    "Is this stock the active volume leader, or a slow distraction?",
+    ("🔥 Active Runner (Surging Volume & Liquidity)", "💤 Illiquid Former Runner (Boring/Consolidating)")
+)
+
+# This physically locks the app if you are looking at a dead ticker
+if distraction_check == "💤 Illiquid Former Runner (Boring/Consolidating)":
+    st.error("🛑 WAKE UP: Stop watching dead tickers. Go find the active volume leader. Playbook is locked.")
+    st.stop() 
+
+st.markdown("---")
+
+# ==========================================
+# SECTION 3: PLAYBOOK CHECKLIST (100 PTS)
+# ==========================================
+st.header("3. Playbook Criteria Checklist")
 
 col1, col2 = st.columns(2)
 
@@ -124,9 +140,9 @@ st.markdown(f"### Score: <span style='color:{color}'>{score} / 100 ({grade})</sp
 st.markdown("---")
 
 # ==========================================
-# SECTION 3: STOCK PROFIT CALCULATOR
+# SECTION 4: STOCK PROFIT CALCULATOR
 # ==========================================
-st.header("3. Stock Profit Calculator")
+st.header("4. Stock Profit Calculator")
 
 # Initialize session state for the share price so the button can update it
 if "share_price_input" not in st.session_state:
