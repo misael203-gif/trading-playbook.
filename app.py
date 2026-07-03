@@ -21,8 +21,8 @@ def format_number(num):
 st.title("⚡ Momentum Trading Playbook")
 st.write("Pre-Market Checklist & Risk Calculator")
 
-# Input for multiple tickers
-tickers_input = st.text_input("Enter up to 5 Tickers (separated by commas)", "CWD, AAPL").upper()
+# Input for multiple tickers (No default values)
+tickers_input = st.text_input("Enter up to 5 Tickers (separated by commas)", "").upper()
 tickers = [t.strip() for t in tickers_input.split(",") if t.strip()][:5]
 
 st.markdown("---")
@@ -32,6 +32,20 @@ if 'scores_data' not in st.session_state:
     st.session_state.scores_data = {}
 if 'ticker_stats' not in st.session_state:
     st.session_state.ticker_stats = {}
+
+# Cleanup memory: Remove any tickers from session state that are no longer in the search box
+keys_to_delete_scores = [k for k in st.session_state.scores_data.keys() if k not in tickers]
+for k in keys_to_delete_scores:
+    del st.session_state.scores_data[k]
+
+keys_to_delete_stats = [k for k in st.session_state.ticker_stats.keys() if k not in tickers]
+for k in keys_to_delete_stats:
+    del st.session_state.ticker_stats[k]
+
+# Stop execution if no tickers are entered to keep the screen clean
+if not tickers:
+    st.info("Enter a ticker symbol above to start building your playbook.")
+    st.stop()
 
 # Create tabs for each ticker + 1 comparison tab
 tabs = st.tabs(tickers + ["🏆 Compare Best Setups"])
