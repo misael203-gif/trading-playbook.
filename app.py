@@ -11,30 +11,51 @@ st.write("Pre-Market Checklist & Risk Calculator")
 st.markdown("---")
 
 # ==========================================
-# SECTION 1: LIVE TRADINGVIEW CHART
+# SECTION 1: LIVE TRADINGVIEW CHARTS
 # ==========================================
-st.header("1. Live Chart")
+st.header("1. Live Charts")
 
-col_ticker, col_time = st.columns([1, 2])
+# Single input controls both charts
+ticker = st.text_input("Ticker Symbol", "AAPL").upper()
 
-with col_ticker:
-    ticker = st.text_input("Ticker Symbol", "AAPL").upper()
-
-with col_time:
-    timeframe = st.radio("Timeframe", ["Daily", "5 Minute", "1 Minute"], horizontal=True)
-
-# Map radio buttons to TradingView intervals
-interval_map = {"Daily": "D", "5 Minute": "5", "1 Minute": "1"}
-interval = interval_map[timeframe]
-
-# Embed TradingView widget using raw HTML
-tv_html = f"""
+# --- Daily Chart ---
+st.subheader("Daily Chart")
+tv_daily_html = f"""
 <div class="tradingview-widget-container">
-  <div id="tradingview_chart"></div>
+  <div id="tv_daily"></div>
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
   <script type="text/javascript">
-  new TradingView.widget(
-  {{
+  new TradingView.widget({{
+  "autosize": true,
+  "symbol": "{ticker}",
+  "interval": "D",
+  "timezone": "America/New_York",
+  "theme": "dark",
+  "style": "1",
+  "locale": "en",
+  "enable_publishing": false,
+  "allow_symbol_change": true,
+  "container_id": "tv_daily"
+}});
+  </script>
+</div>
+"""
+# Height set to 400px for a clean mobile view
+components.html(tv_daily_html, height=400)
+
+# --- Intraday Chart ---
+st.subheader("Intraday Chart")
+timeframe = st.radio("Select Intraday Timeframe", ["1 Minute", "5 Minute", "15 Minute", "30 Minute"], horizontal=True)
+
+interval_map = {"1 Minute": "1", "5 Minute": "5", "15 Minute": "15", "30 Minute": "30"}
+interval = interval_map[timeframe]
+
+tv_intraday_html = f"""
+<div class="tradingview-widget-container">
+  <div id="tv_intraday"></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  <script type="text/javascript">
+  new TradingView.widget({{
   "autosize": true,
   "symbol": "{ticker}",
   "interval": "{interval}",
@@ -44,15 +65,12 @@ tv_html = f"""
   "locale": "en",
   "enable_publishing": false,
   "allow_symbol_change": true,
-  "container_id": "tradingview_chart"
-}}
-  );
+  "container_id": "tv_intraday"
+}});
   </script>
 </div>
 """
-
-# Render the chart
-components.html(tv_html, height=450)
+components.html(tv_intraday_html, height=400)
 
 st.markdown("---")
 
