@@ -23,14 +23,15 @@ st.write("Pre-Market Checklist & Risk Calculator")
 
 # Input for multiple tickers
 tickers_input = st.text_input("Enter up to 5 Tickers (separated by commas)", "CWD, AAPL").upper()
-# Clean up the input into a list, maximum of 5
 tickers = [t.strip() for t in tickers_input.split(",") if t.strip()][:5]
 
 st.markdown("---")
 
-# Store scores globally for the comparison tab
+# Initialize session states for storing persistent data
 if 'scores_data' not in st.session_state:
     st.session_state.scores_data = {}
+if 'ticker_stats' not in st.session_state:
+    st.session_state.ticker_stats = {}
 
 # Create tabs for each ticker + 1 comparison tab
 tabs = st.tabs(tickers + ["🏆 Compare Best Setups"])
@@ -45,8 +46,17 @@ def get_live_price(t):
 
 # Render Playbook for each ticker in its respective tab
 for i, ticker in enumerate(tickers):
+    # Initialize default blank stats for the leaderboard if not fetched yet
+    if ticker not in st.session_state.ticker_stats:
+        st.session_state.ticker_stats[ticker] = {
+            "Float": "N/A",
+            "Volume": "N/A",
+            "Short %": "N/A",
+            "52w High": "N/A",
+            "VWAP": "N/A"
+        }
+
     with tabs[i]:
-        
         # ==========================================
         # SECTION 1: LIVE TRADINGVIEW CHARTS
         # ==========================================
@@ -167,6 +177,16 @@ for i, ticker in enumerate(tickers):
                         else:
                             above_vwap = "N/A"
 
+                        # Save crucial metrics for Leaderboard visibility
+                        st.session_state.ticker_stats[ticker] = {
+                            "Float": float_str,
+                            "Volume": vol,
+                            "Short %": short_pct_str,
+                            "52w High": dist_52h,
+                            "VWAP": above_vwap
+                        }
+
+                        # Display Dashboard Grids
                         c1, c2, c3 = st.columns(3)
                         c1.metric("Open", op)
                         c2.metric("Day's Range", day_range)
@@ -203,9 +223,14 @@ for i, ticker in enumerate(tickers):
         )
 
         if distraction_check == "💤 Illiquid Former Runner (Boring/Consolidating)":
-            st.error("🛑 WAKE UP: Stop watching dead tickers. Go find the active volume leader. Playbook is locked for this ticker.")
-            st.session_state.scores_data[ticker] = {"Score": 0, "Grade": "F-Setup (Discipline Lock)", "Status": "❌ Locked"}
-            continue # Skips the rest of the playbook for this specific tab
+            st.error("🛑 Playbook is locked for this ticker.")
+            st.session_state.scores_data[ticker] = {
+                "Score": 0, 
+                "Grade": "LOCK", 
+                "Status": "❌ Locked",
+                "Float": "N/A", "Volume": "N/A", "Short %": "N/A", "52w High": "N/A", "VWAP": "N/A"
+            }
+            continue
 
         st.markdown("---")
 
@@ -217,7 +242,7 @@ for i, ticker in enumerate(tickers):
         col1, col2 = st.columns(2)
 
         with col1:
-            news_grade = st.slider("News Catalyst Grade (1-5)", 1, 5, 3, key=f"news_{ticker}", help="5=FDA/Earnings, 4=Strong PR, 3=Neutral, 2=Fluff, 1=Dilution/Bad")
+            news_grade = st.slider("News Catalyst Grade (1-5)", 1, 5, 3, key=f"news_{ticker}")
             float_check = st.checkbox("Low Float (< 10M shares)", value=False, key=f"float_{ticker}")
             chart_check = st.checkbox("Clean Daily Chart / Near Breakout", value=False, key=f"chart_{ticker}")
             open_skies = st.checkbox("🌌 Open Skies (No Daily Overhead Resistance)", value=False, key=f"skies_{ticker}")
@@ -245,15 +270,24 @@ for i, ticker in enumerate(tickers):
         if rr_check: score += 5
         if support_check: score += 5
 
-        if score >= 90: grade, color, status = "A-Setup (Full Sizing)", "#2ecc71", "✅ Prime"
-        elif score >= 75: grade, color, status = "B-Setup (Half Sizing)", "#f1c40f", "⚠️ Viable"
-        elif score >= 60: grade, color, status = "C-Setup (Quarter Sizing / Scalp)", "#e67e22", "⚠️ High Risk"
-        else: grade, color, status = "F-Setup (NO TRADE)", "#e74c3c", "❌ Skip"
+        if score >= 90: grade, color, status = "A-Setup", "#2ecc71", "✅ Prime"
+        elif score >= 75: grade, color, status = "B-Setup", "#f1c40f", "⚠️ Viable"
+        elif score >= 60: grade, color, status = "C-Setup", "#e67e22", "⚠️ High Risk"
+        else: grade, color, status = "F-Setup", "#e74c3c", "❌ Skip"
 
         st.markdown(f"### Score: <span style='color:{color}'>{score} / 100 ({grade})</span>", unsafe_allow_html=True)
         
-        # Save score for the comparison tab
-        st.session_state.scores_data[ticker] = {"Score": score, "Grade": grade, "Status": status}
+        # Combine Score + Fetched Stats for the Leaderboard mapping
+        st.session_state.scores_data[ticker] = {
+            "Score": score,
+            "Grade": grade,
+            "Status": status,
+            "Float": st.session_state.ticker_stats[ticker]["Float"],
+            "Volume": st.session_state.ticker_stats[ticker]["Volume"],
+            "Short %": st.session_state.ticker_stats[ticker]["Short %"],
+            "52w High": st.session_state.ticker_stats[ticker]["52w High"],
+            "VWAP": st.session_state.ticker_stats[ticker]["VWAP"]
+        }
 
         st.markdown("---")
 
@@ -265,21 +299,16 @@ for i, ticker in enumerate(tickers):
         if f"share_price_{ticker}" not in st.session_state:
             st.session_state[f"share_price_{ticker}"] = 3.50
 
-        # --- BUY SECTION ---
         st.subheader("BUY")
-
         col_price, col_btn = st.columns([2, 1])
         with col_price:
             share_price = st.number_input("Share Price ($)", min_value=0.0001, step=0.01, format="%.4f", key=f"sp_input_{ticker}", value=st.session_state[f"share_price_{ticker}"])
-            # Sync the session state to manual input
             st.session_state[f"share_price_{ticker}"] = share_price
-            
         with col_btn:
             st.markdown("<br>", unsafe_allow_html=True) 
             st.button("🔄 Auto-Fill Live Price", on_click=get_live_price, args=(ticker,), key=f"btn_{ticker}")
 
         calc_mode = st.radio("Sizing Method", ("# of Shares", "Cash Outlay ($)"), horizontal=True, key=f"cmode_{ticker}")
-
         shares = 0.0
         cash_outlay = 0.0
 
@@ -293,7 +322,6 @@ for i, ticker in enumerate(tickers):
             cash_outlay = cash_input
             st.info(f"Calculated # of Shares: **{shares:,.4f}**")
 
-        # --- SELL SECTION ---
         st.subheader("SELL")
         selling_price = st.number_input("Selling Price ($)", min_value=0.0001, value=5.00, step=0.01, format="%.4f", key=f"sell_{ticker}")
         commission = st.number_input("Commission Included ($)", min_value=0.0, value=0.0, step=1.0, key=f"comm_{ticker}")
@@ -310,7 +338,6 @@ for i, ticker in enumerate(tickers):
 
         st.markdown("---")
 
-        # --- PLAYBOOK RISK CHECK ---
         st.subheader("Playbook Risk Check")
         stop_loss = st.number_input("Planned Stop Loss ($)", min_value=0.0001, value=share_price * 0.95, step=0.01, format="%.4f", key=f"sl_{ticker}")
         risk_per_share = share_price - stop_loss
@@ -318,47 +345,41 @@ for i, ticker in enumerate(tickers):
         if risk_per_share > 0:
             target_price = share_price + (2 * risk_per_share)
             total_risk = shares * risk_per_share
-            
             st.write(f"**Strict 2:1 Target:** ${target_price:,.4f}")
             st.write(f"**Total Capital at Risk:** ${total_risk:,.2f}")
-            
             if selling_price < target_price:
-                st.warning(f"⚠️ Your Selling Price (${selling_price}) is below your strict 2:1 target (${target_price:,.4f}).")
+                st.warning(f"⚠️ Your Selling Price is below your strict 2:1 target.")
             if score < 60:
-                st.error("🛑 Playbook Rule Broken: This is an F-Setup. Do not execute.")
+                st.error("🛑 Playbook Rule Broken: This is an F-Setup.")
         else:
             st.error("Stop Loss must be lower than the Share Price.")
-
 
 # ==========================================
 # COMPARISON TAB LOGIC
 # ==========================================
 with tabs[-1]:
     st.header("🏆 Morning Leaderboard")
-    st.write("Review the scores of all tickers on your watchlist to find the highest probability setup.")
+    st.write("Compare setups side-by-side. Focus on low floats and high relative volume to spot maximum volatility.")
     
-    # Check if there is data to show
     if st.session_state.scores_data:
-        # Convert dictionary to DataFrame for easy display
         df = pd.DataFrame.from_dict(st.session_state.scores_data, orient='index')
         df.index.name = 'Ticker'
         df.reset_index(inplace=True)
         
-        # Sort by Score from highest to lowest
+        # Sort by Playbook Score first
         df = df.sort_values(by='Score', ascending=False).reset_index(drop=True)
         
-        # Display the leaderboard as a clean table
+        # Display the complete matrix
         st.table(df)
         
-        # Determine the winner
         top_ticker = df.iloc[0]['Ticker']
         top_score = df.iloc[0]['Score']
         
         if top_score >= 75:
-            st.success(f"🚀 **Top Focus:** {top_ticker} is currently leading your playbook with a score of {top_score}.")
+            st.success(f"🚀 **Top Focus:** {top_ticker} leads with a playbook score of {top_score}.")
         elif top_score >= 60:
-            st.warning(f"⚠️ **Caution:** {top_ticker} is your best setup, but it only scored {top_score}. Consider sizing down today.")
+            st.warning(f"⚠️ **Caution:** {top_ticker} is your highest scoring ticker, but it's high risk ({top_score} pts).")
         else:
-            st.error("🛑 **No Play:** None of your current tickers passed the playbook minimums. Keep cash safe.")
+            st.error("🛑 **No Play:** No tickers passed minimum guidelines.")
     else:
-        st.info("Fill out the checklists in the ticker tabs to see your leaderboard update here.")
+        st.info("Fill out your ticker checklists to update the master grid.")
