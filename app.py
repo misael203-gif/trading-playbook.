@@ -136,6 +136,12 @@ with st.expander(f"📉 Click to Show/Hide Live Stats for {ticker}", expanded=Fa
                 else:
                     dist_52l = "N/A"
                     
+                # Short Interest Logic
+                shares_short = format_number(info.get('sharesShort'))
+                short_pct = info.get('shortPercentOfFloat')
+                short_pct_str = f"{short_pct * 100:.2f}%" if short_pct else "N/A"
+                short_ratio = info.get('shortRatio', 'N/A')
+
                 # VWAP Logic
                 if not hist.empty and hist['Volume'].sum() > 0:
                     hist['Typical'] = (hist['High'] + hist['Low'] + hist['Close']) / 3
@@ -157,6 +163,10 @@ with st.expander(f"📉 Click to Show/Hide Live Stats for {ticker}", expanded=Fa
                 c1.metric("Float", float_str)
                 c2.metric("52w High", dist_52h)
                 c3.metric("52w Low", dist_52l)
+                
+                c1.metric("Shares Short", shares_short)
+                c2.metric("Short % of Float", short_pct_str)
+                c3.metric("Short Ratio", short_ratio)
                 
                 st.markdown("---")
                 st.metric("Above VWAP", above_vwap)
