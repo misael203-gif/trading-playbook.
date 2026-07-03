@@ -86,95 +86,83 @@ components.html(tv_intraday_html, height=550)
 st.markdown("---")
 
 # ==========================================
-# SECTION 2: LIVE STOCK STATS
+# SECTION 2: LIVE STOCK STATS (COLLAPSIBLE)
 # ==========================================
 st.header("2. Live Stock Stats")
 
-if st.button(f"📊 Fetch Stats for {ticker}"):
-    with st.spinner("Pulling market data..."):
-        try:
-            t = yf.Ticker(ticker)
-            info = t.info
-            
-            # Fetch intraday data to calculate VWAP
-            hist = t.history(period="1d", interval="1m")
-            
-            c_price = info.get('currentPrice', info.get('regularMarketPrice', 0))
-            op = info.get('open', 'N/A')
-            day_low = info.get('dayLow', 'N/A')
-            day_high = info.get('dayHigh', 'N/A')
-            day_range = f"{day_low} - {day_high}" if day_low != 'N/A' else "N/A"
-            vol = format_number(info.get('volume'))
-            prev_close = info.get('previousClose', 'N/A')
-            mcap = format_number(info.get('marketCap'))
-            avg_vol = format_number(info.get('averageVolume'))
-            
-            # Float fallback
-            float_val = info.get('floatShares', info.get('sharesOutstanding', 'N/A'))
-            float_str = format_number(float_val)
-            
-            # 52w High Logic (Cleaned up)
-            high_52 = info.get('fiftyTwoWeekHigh', 0)
-            if c_price and high_52:
-                if c_price >= high_52:
-                    dist_52h = f"${high_52:.2f} (AT HIGH)"
-                else:
-                    diff_pct = ((high_52 - c_price) / high_52) * 100
-                    dist_52h = f"${high_52:.2f} (-{diff_pct:.0f}%)"
-            else:
-                dist_52h = "N/A"
-
-            # 52w Low Logic
-            low_52 = info.get('fiftyTwoWeekLow', 0)
-            if c_price and low_52:
-                if c_price <= low_52:
-                    dist_52l = f"${low_52:.2f} (AT LOW)"
-                else:
-                    diff_pct = ((c_price - low_52) / low_52) * 100
-                    dist_52l = f"${low_52:.2f} (+{diff_pct:.0f}%)"
-            else:
-                dist_52l = "N/A"
+with st.expander(f"📉 Click to Show/Hide Live Stats for {ticker}", expanded=False):
+    if st.button(f"📊 Fetch / Refresh Stats"):
+        with st.spinner("Pulling market data..."):
+            try:
+                t = yf.Ticker(ticker)
+                info = t.info
                 
-            # VWAP Logic
-            if not hist.empty and hist['Volume'].sum() > 0:
-                hist['Typical'] = (hist['High'] + hist['Low'] + hist['Close']) / 3
-                vwap = (hist['Typical'] * hist['Volume']).sum() / hist['Volume'].sum()
-                above_vwap = "Yes 🟢" if c_price > vwap else "No 🔴"
-            else:
-                above_vwap = "N/A"
+                # Fetch intraday data to calculate VWAP
+                hist = t.history(period="1d", interval="1m")
+                
+                c_price = info.get('currentPrice', info.get('regularMarketPrice', 0))
+                op = info.get('open', 'N/A')
+                day_low = info.get('dayLow', 'N/A')
+                day_high = info.get('dayHigh', 'N/A')
+                day_range = f"{day_low} - {day_high}" if day_low != 'N/A' else "N/A"
+                vol = format_number(info.get('volume'))
+                prev_close = info.get('previousClose', 'N/A')
+                mcap = format_number(info.get('marketCap'))
+                avg_vol = format_number(info.get('averageVolume'))
+                
+                # Float fallback
+                float_val = info.get('floatShares', info.get('sharesOutstanding', 'N/A'))
+                float_str = format_number(float_val)
+                
+                # 52w High Logic
+                high_52 = info.get('fiftyTwoWeekHigh', 0)
+                if c_price and high_52:
+                    if c_price >= high_52:
+                        dist_52h = f"${high_52:.2f} (AT HIGH)"
+                    else:
+                        diff_pct = ((high_52 - c_price) / high_52) * 100
+                        dist_52h = f"${high_52:.2f} (-{diff_pct:.0f}%)"
+                else:
+                    dist_52h = "N/A"
 
-            # Display Metrics
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Open", op)
-            c2.metric("Day's Range", day_range)
-            c3.metric("Volume", vol)
-            
-            c1.metric("Prev Close", prev_close)
-            c2.metric("Market Cap", mcap)
-            c3.metric("AVG Vol (3m)", avg_vol)
-            
-            c1.metric("Float", float_str)
-            c2.metric("52w High", dist_52h)
-            c3.metric("52w Low", dist_52l)
-            
-            # Put VWAP in a separate block for neatness alongside the news
-            st.markdown("---")
-            
-            news_data = t.news
-            col_vwap, col_news = st.columns([1, 2])
-            
-            with col_vwap:
+                # 52w Low Logic
+                low_52 = info.get('fiftyTwoWeekLow', 0)
+                if c_price and low_52:
+                    if c_price <= low_52:
+                        dist_52l = f"${low_52:.2f} (AT LOW)"
+                    else:
+                        diff_pct = ((c_price - low_52) / low_52) * 100
+                        dist_52l = f"${low_52:.2f} (+{diff_pct:.0f}%)"
+                else:
+                    dist_52l = "N/A"
+                    
+                # VWAP Logic
+                if not hist.empty and hist['Volume'].sum() > 0:
+                    hist['Typical'] = (hist['High'] + hist['Low'] + hist['Close']) / 3
+                    vwap = (hist['Typical'] * hist['Volume']).sum() / hist['Volume'].sum()
+                    above_vwap = "Yes 🟢" if c_price > vwap else "No 🔴"
+                else:
+                    above_vwap = "N/A"
+
+                # Display Metrics Grid
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Open", op)
+                c2.metric("Day's Range", day_range)
+                c3.metric("Volume", vol)
+                
+                c1.metric("Prev Close", prev_close)
+                c2.metric("Market Cap", mcap)
+                c3.metric("AVG Vol (3m)", avg_vol)
+                
+                c1.metric("Float", float_str)
+                c2.metric("52w High", dist_52h)
+                c3.metric("52w Low", dist_52l)
+                
+                st.markdown("---")
                 st.metric("Above VWAP", above_vwap)
-                
-            with col_news:
-                st.markdown("**Recent News:**")
-                if news_data and len(news_data) > 0:
-                    st.markdown(f"✅ Yes — [{news_data[0]['title']}]({news_data[0]['link']})")
-                else:
-                    st.markdown("❌ No recent news found.")
 
-        except Exception as e:
-            st.error("Data fetch failed. Verify ticker symbol.")
+            except Exception as e:
+                st.error("Data fetch failed. Verify ticker symbol.")
 
 st.markdown("---")
 
