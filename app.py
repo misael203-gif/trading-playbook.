@@ -1,12 +1,3 @@
-Here is the updated code.
-
-I added the extended hours parameter to both charts. Note that **Daily charts do not physically show pre-market action** because a daily candle aggregates the entire day into one bar. However, your **Intraday chart (1m, 5m, 15m, 30m)** will now display all the pre-market and after-hours data.
-
-*(If you ever don't see it on a specific ticker, just click the little "EXT" button at the bottom right of the chart to toggle it on/off).*
-
-Replace your `app.py` code in GitHub with this block and commit the changes:
-
-```python
 import streamlit as st
 import streamlit.components.v1 as components
 import math
@@ -330,5 +321,3 @@ if risk_per_share > 0:
         st.error("🛑 Playbook Rule Broken: This is an F-Setup. Do not execute.")
 else:
     st.error("Stop Loss must be lower than the Share Price.")
-
-```
