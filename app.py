@@ -160,13 +160,13 @@ with st.expander(f"📉 Click to Show/Hide Live Stats for {ticker}", expanded=Fa
                 c2.metric("Market Cap", mcap)
                 c3.metric("AVG Vol (3m)", avg_vol)
                 
-                c1.metric("Float", float_str)
-                c2.metric("52w High", dist_52h)
-                c3.metric("52w Low", dist_52l)
-                
                 c1.metric("Shares Short", shares_short)
-                c2.metric("Short % of Float", short_pct_str)
-                c3.metric("Short Ratio", short_ratio)
+                c2.metric("Float", float_str)
+                c3.metric("52w High", dist_52h)
+                
+                c1.metric("Short % of Float", short_pct_str)
+                c2.metric("Short Ratio", short_ratio)
+                c3.metric("52w Low", dist_52l)
                 
                 st.markdown("---")
                 st.metric("Above VWAP", above_vwap)
