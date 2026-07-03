@@ -102,6 +102,7 @@ with col1:
                            help="5=FDA/Earnings, 4=Strong PR, 3=Neutral, 2=Fluff, 1=Dilution/Bad")
     float_check = st.checkbox("Low Float (< 10M shares)", value=False)
     chart_check = st.checkbox("Clean Daily Chart / Near Breakout", value=False)
+    open_skies = st.checkbox("🌌 Open Skies (No Daily Overhead Resistance)", value=False)
     rvol_check = st.checkbox("Unusual Volume (RVOL > 3x)", value=False)
     gap_check = st.checkbox("Pre-Market Gap > 15%", value=False)
 
@@ -112,11 +113,12 @@ with col2:
     rr_check = st.checkbox("2:1 Upside Available Before Resistance", value=False)
     support_check = st.checkbox("Holding VWAP / Key Level", value=False)
 
-# Calculate Score
+# Calculate Score (Balanced to equal exactly 100)
 score = 0
 if news_grade >= 4: score += 20
-if float_check: score += 15
-if chart_check: score += 15
+if float_check: score += 10
+if chart_check: score += 10
+if open_skies: score += 10
 if rvol_check: score += 10
 if gap_check: score += 10
 if pm_vol_check: score += 10
@@ -164,7 +166,7 @@ col_price, col_btn = st.columns([2, 1])
 with col_price:
     share_price = st.number_input("Share Price ($)", min_value=0.0001, step=0.01, format="%.4f", key="share_price_input")
 with col_btn:
-    st.markdown("<br>", unsafe_allow_html=True) # Adds vertical spacing to align the button with the input box
+    st.markdown("<br>", unsafe_allow_html=True) 
     st.button("🔄 Auto-Fill Live Price", on_click=get_live_price)
 
 calc_mode = st.radio("Sizing Method", ("# of Shares", "Cash Outlay ($)"), horizontal=True)
