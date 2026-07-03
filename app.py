@@ -40,7 +40,6 @@ tv_daily_html = f"""
   </script>
 </div>
 """
-# Height set to 550px for large mobile view
 components.html(tv_daily_html, height=550)
 
 # --- Intraday Chart ---
@@ -111,67 +110,75 @@ if support_check: score += 5
 
 # Grade Assignment
 if score >= 90:
-    grade, color = "A-Setup (Full Sizing Allowed)", "#2ecc71"
+    grade, color = "A-Setup (Full Sizing)", "#2ecc71"
 elif score >= 75:
-    grade, color = "B-Setup (Half Sizing Allowed)", "#f1c40f"
+    grade, color = "B-Setup (Half Sizing)", "#f1c40f"
 elif score >= 60:
     grade, color = "C-Setup (Quarter Sizing / Scalp)", "#e67e22"
 else:
     grade, color = "F-Setup (NO TRADE / WATCH ONLY)", "#e74c3c"
 
-st.markdown(f"### Playbook Score: <span style='color:{color}'>{score} / 100 ({grade})</span>", unsafe_allow_html=True)
+st.markdown(f"### Score: <span style='color:{color}'>{score} / 100 ({grade})</span>", unsafe_allow_html=True)
 
 st.markdown("---")
 
 # ==========================================
-# SECTION 3: DUAL-INPUT POSITION CALCULATOR
+# SECTION 3: STOCK PROFIT CALCULATOR
 # ==========================================
-st.header("3. Position Sizing & 2:1 Calculator")
+st.header("3. Stock Profit Calculator")
 
-entry_price = st.number_input("Entry Price ($)", min_value=0.01, value=2.00, step=0.01)
-stop_loss = st.number_input("Stop Loss ($)", min_value=0.01, value=1.85, step=0.01)
+# --- BUY SECTION ---
+st.subheader("BUY")
+share_price = st.number_input("Share Price ($)", min_value=0.0001, value=3.50, step=0.01, format="%.4f")
 
-risk_per_share = entry_price - stop_loss
+calc_mode = st.radio("Sizing Method", ("# of Shares", "Cash Outlay ($)"), horizontal=True)
 
-if risk_per_share <= 0:
-    st.error("Stop Loss must be lower than the Entry Price!")
+shares = 0.0
+cash_outlay = 0.0
+
+if calc_mode == "# of Shares":
+    shares = st.number_input("# of Shares", min_value=0.0, value=1000.0, step=100.0)
+    cash_outlay = shares * share_price
+    st.info(f"Calculated Cash Outlay: **${cash_outlay:,.2f}**")
 else:
-    # Toggle for input type
-    calc_mode = st.radio("How do you want to size this trade?", ("By Cash Amount ($)", "By Number of Shares"))
-    
-    shares = 0
-    cash_used = 0.0
-    
-    if calc_mode == "By Cash Amount ($)":
-        cash_input = st.number_input("Enter Cash Investment ($)", min_value=0.0, value=2000.0, step=100.0)
-        shares = math.floor(cash_input / entry_price) if entry_price > 0 else 0
-        cash_used = shares * entry_price
-    else:
-        shares_input = st.number_input("Enter Number of Shares", min_value=0, value=1000, step=100)
-        shares = shares_input
-        cash_used = shares * entry_price
+    cash_input = st.number_input("Cash Outlay ($)", min_value=0.0, value=1000.0, step=100.0)
+    shares = cash_input / share_price if share_price > 0 else 0
+    cash_outlay = cash_input
+    st.info(f"Calculated # of Shares: **{shares:,.4f}**")
 
-    # 2:1 Target Calculation
-    target_price = entry_price + (2 * risk_per_share)
+# --- SELL SECTION ---
+st.subheader("SELL")
+selling_price = st.number_input("Selling Price ($)", min_value=0.0001, value=5.00, step=0.01, format="%.4f")
+commission = st.number_input("Commission Included ($)", min_value=0.0, value=0.0, step=1.0)
+
+# Calculations
+gross_proceeds = shares * selling_price
+net_profit = (gross_proceeds - cash_outlay) - commission
+percent_return = (net_profit / cash_outlay) * 100 if cash_outlay > 0 else 0.0
+
+col_out1, col_out2 = st.columns(2)
+with col_out1:
+    st.metric("Net Profit", f"${net_profit:,.2f}")
+with col_out2:
+    st.metric("% of Return", f"{percent_return:,.2f}%")
+
+st.markdown("---")
+
+# --- PLAYBOOK RISK CHECK ---
+st.subheader("Playbook Risk Check")
+stop_loss = st.number_input("Planned Stop Loss ($)", min_value=0.0001, value=share_price * 0.95, step=0.01, format="%.4f")
+risk_per_share = share_price - stop_loss
+
+if risk_per_share > 0:
+    target_price = share_price + (2 * risk_per_share)
     total_risk = shares * risk_per_share
-    potential_reward = shares * (target_price - entry_price)
-
-    # Output Results
-    st.markdown("### 📊 Trade Plan Metrics")
     
-    col_out1, col_out2 = st.columns(2)
-    with col_out1:
-        st.metric(label="Shares to Buy", value=f"{shares:,}")
-        st.metric(label="Total Cash Required", value=f"${cash_used:,.2f}")
-        st.metric(label="Total Capital at Risk", value=f"${total_risk:,.2f}")
-        
-    with col_out2:
-        st.metric(label="Strict 2:1 Profit Target", value=f"${target_price:.2f}")
-        st.metric(label="Potential Max Reward", value=f"${potential_reward:,.2f}")
-        st.metric(label="Reward-to-Risk Ratio", value="2.0 : 1")
-
-    # Real-time warnings based on setup quality
+    st.write(f"**Strict 2:1 Target:** ${target_price:,.4f}")
+    st.write(f"**Total Capital at Risk:** ${total_risk:,.2f}")
+    
+    if selling_price < target_price:
+        st.warning(f"⚠️ Your Selling Price (${selling_price}) is below your strict 2:1 target (${target_price:,.4f}).")
     if score < 60:
-        st.error("⚠️ Playbook Rule Broken: This is an F-Setup. Execution is locked based on your criteria.")
-    elif score < 75 and total_risk > 50:
-        st.warning("⚠️ Warning: This is a C-Setup. Consider reducing your size/risk further.")
+        st.error("🛑 Playbook Rule Broken: This is an F-Setup. Do not execute.")
+else:
+    st.error("Stop Loss must be lower than the Share Price.")
