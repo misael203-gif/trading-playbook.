@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import math
 
 # Set mobile-friendly page config
@@ -10,9 +11,55 @@ st.write("Pre-Market Checklist & Risk Calculator")
 st.markdown("---")
 
 # ==========================================
-# SECTION 1: PLAYBOOK CHECKLIST (100 PTS)
+# SECTION 1: LIVE TRADINGVIEW CHART
 # ==========================================
-st.header("1. Playbook Criteria Checklist")
+st.header("1. Live Chart")
+
+col_ticker, col_time = st.columns([1, 2])
+
+with col_ticker:
+    ticker = st.text_input("Ticker Symbol", "AAPL").upper()
+
+with col_time:
+    timeframe = st.radio("Timeframe", ["Daily", "5 Minute", "1 Minute"], horizontal=True)
+
+# Map radio buttons to TradingView intervals
+interval_map = {"Daily": "D", "5 Minute": "5", "1 Minute": "1"}
+interval = interval_map[timeframe]
+
+# Embed TradingView widget using raw HTML
+tv_html = f"""
+<div class="tradingview-widget-container">
+  <div id="tradingview_chart"></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  <script type="text/javascript">
+  new TradingView.widget(
+  {{
+  "autosize": true,
+  "symbol": "{ticker}",
+  "interval": "{interval}",
+  "timezone": "America/New_York",
+  "theme": "dark",
+  "style": "1",
+  "locale": "en",
+  "enable_publishing": false,
+  "allow_symbol_change": true,
+  "container_id": "tradingview_chart"
+}}
+  );
+  </script>
+</div>
+"""
+
+# Render the chart
+components.html(tv_html, height=450)
+
+st.markdown("---")
+
+# ==========================================
+# SECTION 2: PLAYBOOK CHECKLIST (100 PTS)
+# ==========================================
+st.header("2. Playbook Criteria Checklist")
 
 col1, col2 = st.columns(2)
 
@@ -59,9 +106,9 @@ st.markdown(f"### Playbook Score: <span style='color:{color}'>{score} / 100 ({gr
 st.markdown("---")
 
 # ==========================================
-# SECTION 2: DUAL-INPUT POSITION CALCULATOR
+# SECTION 3: DUAL-INPUT POSITION CALCULATOR
 # ==========================================
-st.header("2. Position Sizing & 2:1 Calculator")
+st.header("3. Position Sizing & 2:1 Calculator")
 
 entry_price = st.number_input("Entry Price ($)", min_value=0.01, value=2.00, step=0.01)
 stop_loss = st.number_input("Stop Loss ($)", min_value=0.01, value=1.85, step=0.01)
