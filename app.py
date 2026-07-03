@@ -27,8 +27,10 @@ st.markdown("---")
 # ==========================================
 st.header("1. Live Charts")
 
+# Single input controls both charts
 ticker = st.text_input("Ticker Symbol", "CWD").upper()
 
+# --- Daily Chart ---
 st.subheader("Daily Chart")
 tv_daily_html = f"""
 <div class="tradingview-widget-container" style="height: 550px; width: 100%;">
@@ -52,6 +54,7 @@ tv_daily_html = f"""
 """
 components.html(tv_daily_html, height=550)
 
+# --- Intraday Chart ---
 st.subheader("Intraday Chart")
 timeframe = st.radio("Select Intraday Timeframe", ["1 Minute", "5 Minute", "15 Minute", "30 Minute"], horizontal=True)
 
@@ -106,22 +109,31 @@ if st.button(f"📊 Fetch Stats for {ticker}"):
             mcap = format_number(info.get('marketCap'))
             avg_vol = format_number(info.get('averageVolume'))
             
-            # Float fallback if yfinance doesn't have float for the ticker
+            # Float fallback
             float_val = info.get('floatShares', info.get('sharesOutstanding', 'N/A'))
             float_str = format_number(float_val)
             
+            # 52w High Logic (Cleaned up)
             high_52 = info.get('fiftyTwoWeekHigh', 0)
-            
-            # 52w High Logic
             if c_price and high_52:
                 if c_price >= high_52:
-                    dist_52 = "At 52w High 🚀"
+                    dist_52h = f"${high_52:.2f} (AT HIGH)"
                 else:
-                    diff_dlr = high_52 - c_price
-                    diff_pct = (diff_dlr / high_52) * 100
-                    dist_52 = f"${high_52:.2f} (-${diff_dlr:.2f} / -{diff_pct:.1f}%)"
+                    diff_pct = ((high_52 - c_price) / high_52) * 100
+                    dist_52h = f"${high_52:.2f} (-{diff_pct:.0f}%)"
             else:
-                dist_52 = "N/A"
+                dist_52h = "N/A"
+
+            # 52w Low Logic
+            low_52 = info.get('fiftyTwoWeekLow', 0)
+            if c_price and low_52:
+                if c_price <= low_52:
+                    dist_52l = f"${low_52:.2f} (AT LOW)"
+                else:
+                    diff_pct = ((c_price - low_52) / low_52) * 100
+                    dist_52l = f"${low_52:.2f} (+{diff_pct:.0f}%)"
+            else:
+                dist_52l = "N/A"
                 
             # VWAP Logic
             if not hist.empty and hist['Volume'].sum() > 0:
@@ -131,7 +143,7 @@ if st.button(f"📊 Fetch Stats for {ticker}"):
             else:
                 above_vwap = "N/A"
 
-            # Display Grid
+            # Display Metrics
             c1, c2, c3 = st.columns(3)
             c1.metric("Open", op)
             c2.metric("Day's Range", day_range)
@@ -142,8 +154,24 @@ if st.button(f"📊 Fetch Stats for {ticker}"):
             c3.metric("AVG Vol (3m)", avg_vol)
             
             c1.metric("Float", float_str)
-            c2.metric("52w High", dist_52)
-            c3.metric("Above VWAP", above_vwap)
+            c2.metric("52w High", dist_52h)
+            c3.metric("52w Low", dist_52l)
+            
+            # Put VWAP in a separate block for neatness alongside the news
+            st.markdown("---")
+            
+            news_data = t.news
+            col_vwap, col_news = st.columns([1, 2])
+            
+            with col_vwap:
+                st.metric("Above VWAP", above_vwap)
+                
+            with col_news:
+                st.markdown("**Recent News:**")
+                if news_data and len(news_data) > 0:
+                    st.markdown(f"✅ Yes — [{news_data[0]['title']}]({news_data[0]['link']})")
+                else:
+                    st.markdown("❌ No recent news found.")
 
         except Exception as e:
             st.error("Data fetch failed. Verify ticker symbol.")
