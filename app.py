@@ -6,6 +6,17 @@ import yfinance as yf
 # Set mobile-friendly page config
 st.set_page_config(page_title="Trading Playbook", layout="centered")
 
+def format_number(num):
+    if num is None or num == 'N/A': return "N/A"
+    try:
+        num = float(num)
+        if num >= 1_000_000_000: return f"{num/1_000_000_000:.2f}B"
+        elif num >= 1_000_000: return f"{num/1_000_000:.2f}M"
+        elif num >= 1_000: return f"{num/1_000:.2f}K"
+        else: return f"{num:.2f}"
+    except:
+        return "N/A"
+
 st.title("⚡ Momentum Trading Playbook")
 st.write("Pre-Market Checklist & Risk Calculator")
 
@@ -16,10 +27,8 @@ st.markdown("---")
 # ==========================================
 st.header("1. Live Charts")
 
-# Single input controls both charts
 ticker = st.text_input("Ticker Symbol", "CWD").upper()
 
-# --- Daily Chart ---
 st.subheader("Daily Chart")
 tv_daily_html = f"""
 <div class="tradingview-widget-container" style="height: 550px; width: 100%;">
@@ -43,7 +52,6 @@ tv_daily_html = f"""
 """
 components.html(tv_daily_html, height=550)
 
-# --- Intraday Chart ---
 st.subheader("Intraday Chart")
 timeframe = st.radio("Select Intraday Timeframe", ["1 Minute", "5 Minute", "15 Minute", "30 Minute"], horizontal=True)
 
@@ -75,15 +83,82 @@ components.html(tv_intraday_html, height=550)
 st.markdown("---")
 
 # ==========================================
-# SECTION 2: TRADER DISCIPLINE CHECK
+# SECTION 2: LIVE STOCK STATS
 # ==========================================
-st.header("2. Discipline Check")
+st.header("2. Live Stock Stats")
+
+if st.button(f"📊 Fetch Stats for {ticker}"):
+    with st.spinner("Pulling market data..."):
+        try:
+            t = yf.Ticker(ticker)
+            info = t.info
+            
+            # Fetch intraday data to calculate VWAP
+            hist = t.history(period="1d", interval="1m")
+            
+            c_price = info.get('currentPrice', info.get('regularMarketPrice', 0))
+            op = info.get('open', 'N/A')
+            day_low = info.get('dayLow', 'N/A')
+            day_high = info.get('dayHigh', 'N/A')
+            day_range = f"{day_low} - {day_high}" if day_low != 'N/A' else "N/A"
+            vol = format_number(info.get('volume'))
+            prev_close = info.get('previousClose', 'N/A')
+            mcap = format_number(info.get('marketCap'))
+            avg_vol = format_number(info.get('averageVolume'))
+            
+            # Float fallback if yfinance doesn't have float for the ticker
+            float_val = info.get('floatShares', info.get('sharesOutstanding', 'N/A'))
+            float_str = format_number(float_val)
+            
+            high_52 = info.get('fiftyTwoWeekHigh', 0)
+            
+            # 52w High Logic
+            if c_price and high_52:
+                if c_price >= high_52:
+                    dist_52 = "At 52w High 🚀"
+                else:
+                    diff_dlr = high_52 - c_price
+                    diff_pct = (diff_dlr / high_52) * 100
+                    dist_52 = f"${high_52:.2f} (-${diff_dlr:.2f} / -{diff_pct:.1f}%)"
+            else:
+                dist_52 = "N/A"
+                
+            # VWAP Logic
+            if not hist.empty and hist['Volume'].sum() > 0:
+                hist['Typical'] = (hist['High'] + hist['Low'] + hist['Close']) / 3
+                vwap = (hist['Typical'] * hist['Volume']).sum() / hist['Volume'].sum()
+                above_vwap = "Yes 🟢" if c_price > vwap else "No 🔴"
+            else:
+                above_vwap = "N/A"
+
+            # Display Grid
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Open", op)
+            c2.metric("Day's Range", day_range)
+            c3.metric("Volume", vol)
+            
+            c1.metric("Prev Close", prev_close)
+            c2.metric("Market Cap", mcap)
+            c3.metric("AVG Vol (3m)", avg_vol)
+            
+            c1.metric("Float", float_str)
+            c2.metric("52w High", dist_52)
+            c3.metric("Above VWAP", above_vwap)
+
+        except Exception as e:
+            st.error("Data fetch failed. Verify ticker symbol.")
+
+st.markdown("---")
+
+# ==========================================
+# SECTION 3: TRADER DISCIPLINE CHECK
+# ==========================================
+st.header("3. Discipline Check")
 distraction_check = st.radio(
     "Is this stock the active volume leader, or a slow distraction?",
     ("🔥 Active Runner (Surging Volume & Liquidity)", "💤 Illiquid Former Runner (Boring/Consolidating)")
 )
 
-# This physically locks the app if you are looking at a dead ticker
 if distraction_check == "💤 Illiquid Former Runner (Boring/Consolidating)":
     st.error("🛑 WAKE UP: Stop watching dead tickers. Go find the active volume leader. Playbook is locked.")
     st.stop() 
@@ -91,9 +166,9 @@ if distraction_check == "💤 Illiquid Former Runner (Boring/Consolidating)":
 st.markdown("---")
 
 # ==========================================
-# SECTION 3: PLAYBOOK CHECKLIST (100 PTS)
+# SECTION 4: PLAYBOOK CHECKLIST (100 PTS)
 # ==========================================
-st.header("3. Playbook Criteria Checklist")
+st.header("4. Playbook Criteria Checklist")
 
 col1, col2 = st.columns(2)
 
@@ -113,7 +188,7 @@ with col2:
     rr_check = st.checkbox("2:1 Upside Available Before Resistance", value=False)
     support_check = st.checkbox("Holding VWAP / Key Level", value=False)
 
-# Calculate Score (Balanced to equal exactly 100)
+# Calculate Score
 score = 0
 if news_grade >= 4: score += 20
 if float_check: score += 10
@@ -142,17 +217,15 @@ st.markdown(f"### Score: <span style='color:{color}'>{score} / 100 ({grade})</sp
 st.markdown("---")
 
 # ==========================================
-# SECTION 4: STOCK PROFIT CALCULATOR
+# SECTION 5: STOCK PROFIT CALCULATOR
 # ==========================================
-st.header("4. Stock Profit Calculator")
+st.header("5. Stock Profit Calculator")
 
-# Initialize session state for the share price so the button can update it
 if "share_price_input" not in st.session_state:
     st.session_state.share_price_input = 3.50
 
 def get_live_price():
     try:
-        # Fetch the last day's data for the ticker and grab the closing price
         data = yf.Ticker(ticker).history(period="1d")
         if not data.empty:
             st.session_state.share_price_input = float(data['Close'].iloc[-1])
