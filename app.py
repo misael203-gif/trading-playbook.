@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import math
+import yfinance as yf
 
 # Set mobile-friendly page config
 st.set_page_config(page_title="Trading Playbook", layout="centered")
@@ -127,9 +128,28 @@ st.markdown("---")
 # ==========================================
 st.header("3. Stock Profit Calculator")
 
+# Initialize session state for the share price so the button can update it
+if "share_price_input" not in st.session_state:
+    st.session_state.share_price_input = 3.50
+
+def get_live_price():
+    try:
+        # Fetch the last day's data for the ticker and grab the closing price
+        data = yf.Ticker(ticker).history(period="1d")
+        if not data.empty:
+            st.session_state.share_price_input = float(data['Close'].iloc[-1])
+    except:
+        pass
+
 # --- BUY SECTION ---
 st.subheader("BUY")
-share_price = st.number_input("Share Price ($)", min_value=0.0001, value=3.50, step=0.01, format="%.4f")
+
+col_price, col_btn = st.columns([2, 1])
+with col_price:
+    share_price = st.number_input("Share Price ($)", min_value=0.0001, step=0.01, format="%.4f", key="share_price_input")
+with col_btn:
+    st.markdown("<br>", unsafe_allow_html=True) # Adds vertical spacing to align the button with the input box
+    st.button("🔄 Auto-Fill Live Price", on_click=get_live_price)
 
 calc_mode = st.radio("Sizing Method", ("# of Shares", "Cash Outlay ($)"), horizontal=True)
 
