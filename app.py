@@ -249,40 +249,39 @@ for i, ticker in enumerate(tickers):
         st.markdown("---")
 
         # ==========================================
-        # SECTION 4: PLAYBOOK CHECKLIST (100 PTS)
+        # SECTION 4: PLAYBOOK CRITERIA CHECKLIST
         # ==========================================
         st.header("4. Playbook Criteria Checklist")
 
         col1, col2 = st.columns(2)
 
         with col1:
-            news_grade = st.slider("News Catalyst Grade (1-5)", 1, 5, 3, key=f"news_{ticker}")
-            float_check = st.checkbox("Low Float (< 10M shares)", value=False, key=f"float_{ticker}")
-            chart_check = st.checkbox("Clean Daily Chart / Near Breakout", value=False, key=f"chart_{ticker}")
-            open_skies = st.checkbox("🌌 Open Skies (No Daily Overhead Resistance)", value=False, key=f"skies_{ticker}")
-            rvol_check = st.checkbox("Unusual Volume (RVOL > 3x)", value=False, key=f"rvol_{ticker}")
-            gap_check = st.checkbox("Pre-Market Gap > 15%", value=False, key=f"gap_{ticker}")
+            st.subheader("Long Attributes...")
+            low_float = st.radio("Low Float", ["Y", "N"], horizontal=True, key=f"lf_{ticker}")
+            up_10 = st.radio("Up more than 10%", ["Y", "N"], horizontal=True, key=f"up_{ticker}")
+            unusual_vol = st.radio("Have Unusual Volume", ["Y", "N"], horizontal=True, key=f"uvol_{ticker}")
+            former_runner = st.radio("Former Runner", ["Y", "N"], horizontal=True, key=f"fr_{ticker}")
+            catalyst_yn = st.radio("Catalyst (News/PR)", ["Y", "N"], horizontal=True, key=f"catyn_{ticker}")
+            dollar_break = st.radio("Whole/Half $ Break", ["Y", "N"], horizontal=True, key=f"brk_{ticker}")
+            clear_support = st.radio("Clear support to set risk", ["Y", "N"], horizontal=True, key=f"supp_{ticker}")
 
         with col2:
-            pm_vol_check = st.checkbox("Pre-Market Volume > 500k", value=False, key=f"pmvol_{ticker}")
-            dilution_check = st.checkbox("No Active Dilution (S-3/ATM)", value=False, key=f"dilution_{ticker}")
-            time_check = st.checkbox("Peak Time (9:30 AM - 10:30 AM)", value=False, key=f"time_{ticker}")
-            rr_check = st.checkbox("2:1 Upside Available Before Resistance", value=False, key=f"rr_{ticker}")
-            support_check = st.checkbox("Holding VWAP / Key Level", value=False, key=f"supp_{ticker}")
+            st.subheader("Quality of the setup?")
+            setup_float = st.text_input("Float", key=f"sfloat_{ticker}")
+            support_area = st.text_input("Support area (for risk)", key=f"sarea_{ticker}")
+            rating_catalyst = st.number_input("Rating of Catalyst (1-5)", min_value=1, max_value=5, value=3, key=f"rcat_{ticker}")
 
-        # Calculate Score
+        # Calculate Score (Balanced to max 100 points based on the 8 new inputs)
         score = 0
-        if news_grade >= 4: score += 20
-        if float_check: score += 10
-        if chart_check: score += 10
-        if open_skies: score += 10
-        if rvol_check: score += 10
-        if gap_check: score += 10
-        if pm_vol_check: score += 10
-        if dilution_check: score += 5
-        if time_check: score += 5
-        if rr_check: score += 5
-        if support_check: score += 5
+        if low_float == "Y": score += 15
+        if up_10 == "Y": score += 10
+        if unusual_vol == "Y": score += 15
+        if former_runner == "Y": score += 10
+        if catalyst_yn == "Y": score += 10
+        if dollar_break == "Y": score += 10
+        if clear_support == "Y": score += 10
+        
+        score += (rating_catalyst * 4) # Up to 20 points
 
         if score >= 90: grade, color, status = "A-Setup", "#2ecc71", "✅ Prime"
         elif score >= 75: grade, color, status = "B-Setup", "#f1c40f", "⚠️ Viable"
