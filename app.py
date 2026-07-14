@@ -257,31 +257,48 @@ for i, ticker in enumerate(tickers):
 
         with col1:
             st.subheader("Long Attributes...")
-            low_float = st.radio("Low Float", ["Y", "N"], horizontal=True, key=f"lf_{ticker}")
             up_10 = st.radio("Up more than 10%", ["Y", "N"], horizontal=True, key=f"up_{ticker}")
             unusual_vol = st.radio("Have Unusual Volume", ["Y", "N"], horizontal=True, key=f"uvol_{ticker}")
             former_runner = st.radio("Former Runner", ["Y", "N"], horizontal=True, key=f"fr_{ticker}")
             catalyst_yn = st.radio("Catalyst (News/PR)", ["Y", "N"], horizontal=True, key=f"catyn_{ticker}")
             dollar_break = st.radio("Whole/Half $ Break", ["Y", "N"], horizontal=True, key=f"brk_{ticker}")
-            clear_support = st.radio("Clear support to set risk", ["Y", "N"], horizontal=True, key=f"supp_{ticker}")
+            clear_support = st.radio("Clear support to set risk", ["Y", "N"], horizontal=True, key=f"suppck_{ticker}")
 
         with col2:
             st.subheader("Quality of the setup?")
-            setup_float = st.text_input("Float", key=f"sfloat_{ticker}")
+            float_category = st.selectbox(
+                "Float Category",
+                [
+                    "Micro Float (< 1M) [10 pts]",
+                    "Low Float (1M - 10M) [8 pts]",
+                    "Medium Float (10M - 50M) [6 pts]",
+                    "High Float (50M+) [4 pts]"
+                ],
+                key=f"fcat_{ticker}"
+            )
+            setup_float = st.text_input("Actual Float Size", key=f"sfloat_{ticker}")
             support_area = st.text_input("Support area (for risk)", key=f"sarea_{ticker}")
             rating_catalyst = st.number_input("Rating of Catalyst (1-5)", min_value=1, max_value=5, value=3, key=f"rcat_{ticker}")
 
-        # Calculate Score (Balanced to max 100 points based on the 8 new inputs)
+        # Calculate Score (Balanced to max 100 points)
         score = 0
-        if low_float == "Y": score += 15
+        
+        # Float Category Points
+        if "Micro" in float_category: score += 10
+        elif "Low" in float_category: score += 8
+        elif "Medium" in float_category: score += 6
+        elif "High" in float_category: score += 4
+
+        # Yes/No Check Points
         if up_10 == "Y": score += 10
-        if unusual_vol == "Y": score += 15
+        if unusual_vol == "Y": score += 20 # Weighted heavily for momentum
         if former_runner == "Y": score += 10
         if catalyst_yn == "Y": score += 10
         if dollar_break == "Y": score += 10
         if clear_support == "Y": score += 10
         
-        score += (rating_catalyst * 4) # Up to 20 points
+        # Rating Points
+        score += (rating_catalyst * 4) # Max 20 points
 
         if score >= 90: grade, color, status = "A-Setup", "#2ecc71", "✅ Prime"
         elif score >= 75: grade, color, status = "B-Setup", "#f1c40f", "⚠️ Viable"
