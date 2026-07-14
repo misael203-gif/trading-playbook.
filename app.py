@@ -60,7 +60,7 @@ def get_live_price(t):
 
 # Render Playbook for each ticker in its respective tab
 for i, ticker in enumerate(tickers):
-    # Initialize default blank stats for the leaderboard if not fetched yet
+    # Initialize default blank stats for the leaderboard and input sync if not fetched yet
     if ticker not in st.session_state.ticker_stats:
         st.session_state.ticker_stats[ticker] = {
             "Float": "N/A",
@@ -69,6 +69,10 @@ for i, ticker in enumerate(tickers):
             "52w High": "N/A",
             "VWAP": "N/A"
         }
+    
+    # Initialize manual input override key if it doesn't exist
+    if f"manual_float_{ticker}" not in st.session_state:
+        st.session_state[f"manual_float_{ticker}"] = ""
 
     with tabs[i]:
         # ==========================================
@@ -158,6 +162,9 @@ for i, ticker in enumerate(tickers):
                         
                         float_val = info.get('floatShares', info.get('sharesOutstanding', 'N/A'))
                         float_str = format_number(float_val)
+                        
+                        # Direct autofill to session state variable linked to the text box
+                        st.session_state[f"manual_float_{ticker}"] = float_str
                         
                         high_52 = info.get('fiftyTwoWeekHigh', 0)
                         if c_price and high_52:
@@ -276,7 +283,9 @@ for i, ticker in enumerate(tickers):
                 ],
                 key=f"fcat_{ticker}"
             )
-            setup_float = st.text_input("Actual Float Size", key=f"sfloat_{ticker}")
+            
+            # The value parameter is bound directly to st.session_state variable handled in Section 2
+            setup_float = st.text_input("Actual Float Size", key=f"manual_float_{ticker}")
             support_area = st.text_input("Support area (for risk)", key=f"sarea_{ticker}")
             rating_catalyst = st.number_input("Rating of Catalyst (1-5)", min_value=1, max_value=5, value=3, key=f"rcat_{ticker}")
 
@@ -291,7 +300,7 @@ for i, ticker in enumerate(tickers):
 
         # Yes/No Check Points
         if up_10 == "Y": score += 10
-        if unusual_vol == "Y": score += 20 # Weighted heavily for momentum
+        if unusual_vol == "Y": score += 20 
         if former_runner == "Y": score += 10
         if catalyst_yn == "Y": score += 10
         if dollar_break == "Y": score += 10
