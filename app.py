@@ -514,4 +514,4 @@ with tabs[-1]:
             st.rerun()
             
     except Exception as e:
-        st.error("Could not connect to Google Sheets. Verify your URL and sharing permissions.")
+        st.error(f"The exact error is: {e}")
