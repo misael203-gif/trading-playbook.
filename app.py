@@ -5,6 +5,7 @@ import yfinance as yf
 import pandas as pd
 import datetime
 import time
+import calendar
 
 # Set mobile-friendly page config
 st.set_page_config(page_title="Trading Playbook", layout="wide")
@@ -82,8 +83,8 @@ if not tickers:
     st.info("Enter a ticker symbol above to start building your playbook.")
     st.stop()
 
-# Create tabs for each ticker + Comparison + Risk Monitor + Trade Log
-tabs = st.tabs(tickers + ["🏆 Compare Best Setups", "🛡️ Risk & Drawdown Monitor", "📝 Trade Log"])
+# Create tabs for each ticker + Comparison + Risk Monitor + Calendar + Trade Log
+tabs = st.tabs(tickers + ["🏆 Compare Best Setups", "🛡️ Risk & Drawdown Monitor", "📅 P/L Calendar", "📝 Trade Log"])
 
 def get_live_price(t):
     try:
@@ -380,7 +381,7 @@ for i, ticker in enumerate(tickers):
 # ==========================================
 # COMPARISON TAB LOGIC
 # ==========================================
-with tabs[-3]:
+with tabs[-4]:
     st.header("🏆 Morning Leaderboard")
     st.write("Compare setups side-by-side. Focus on low floats and high relative volume to spot maximum volatility.")
     
@@ -403,7 +404,7 @@ with tabs[-3]:
 # ==========================================
 # RISK & DRAWDOWN MONITOR TAB LOGIC
 # ==========================================
-with tabs[-2]:
+with tabs[-3]:
     st.header("🛡️ 6-Month Account Survival Dashboard")
     st.write("Track metrics to preserve your capital over a six-month trading horizon.")
     
@@ -421,7 +422,6 @@ with tabs[-2]:
     st.markdown("### 🗓️ Sync with Trade Log")
     st.write("Select the dates below to automatically calculate your Intraday and Weekly P/L from your Google Sheet.")
     
-    # Default to Monday of the current week for easy tracking
     today = datetime.date.today()
     monday = today - datetime.timedelta(days=today.weekday())
     
@@ -431,7 +431,6 @@ with tabs[-2]:
     with col_cal2:
         current_day = st.date_input("Today's Date", value=today)
 
-    # Automatically calculate real-time P/L from the Google Sheet
     daily_pl = 0.0
     weekly_pl = 0.0
     
@@ -449,7 +448,6 @@ with tabs[-2]:
     
     st.markdown("---")
     
-    # Drawdown Calculations
     max_daily_drawdown = 140.00
     max_weekly_drawdown = 350.00
     
@@ -459,26 +457,79 @@ with tabs[-2]:
     st.markdown("### 📉 Remaining Drawdown Buffers")
     col_m1, col_m2 = st.columns(2)
     
-    # Daily Breaker Display
     if daily_pl <= -max_daily_drawdown:
         col_m1.metric("Daily Limit Status", f"${daily_pl:,.2f}", "⚠️ BREACHED", delta_color="inverse")
         st.error("🛑 **DAILY LOSS LIMIT BREACHED:** Shut down your platform immediately. Do not attempt another trade.")
     else:
         col_m1.metric("Daily Room Left", f"${remaining_daily:,.2f}", f"Current Daily P/L: ${daily_pl:,.2f}")
         
-    # Weekly Breaker Display
     if weekly_pl <= -max_weekly_drawdown:
         col_m2.metric("Weekly Limit Status", f"${weekly_pl:,.2f}", "🚨 SYSTEM LOCKED", delta_color="inverse")
         st.error("🛑 **WEEKLY DRAWDOWN CIRCUIT BREAKER HIT:** Market context is toxic for your playbook. You are locked out until next Monday.")
     else:
         col_m2.metric("Weekly Room Left", f"${remaining_weekly:,.2f}", f"Current Weekly P/L: ${weekly_pl:,.2f}")
 
-    # Explicit Self-Assessment Checklist
     st.markdown("---")
     st.markdown("### 🧠 Self-Discipline Checklist")
     st.checkbox("I am executing outlays below $466 and utilizing strict 15% stops.")
     st.checkbox("I am refusing to average down on standard setups that go against my entry point.")
     st.checkbox("I am taking partial profits between 20% and 30% instead of holding for micro-cap home runs.")
+
+# ==========================================
+# P/L CALENDAR TAB LOGIC
+# ==========================================
+with tabs[-2]:
+    st.header("📅 Daily P/L Calendar")
+    
+    today = datetime.date.today()
+    col_y, col_m = st.columns(2)
+    with col_y:
+        selected_year = st.selectbox("Select Year", range(2023, 2035), index=range(2023, 2035).index(today.year))
+    with col_m:
+        selected_month = st.selectbox("Select Month", range(1, 13), index=today.month - 1, format_func=lambda x: calendar.month_name[x])
+        
+    st.markdown("---")
+    
+    daily_sums = {}
+    if not df_trades.empty and 'Date_Parsed' in df_trades.columns:
+        cal_df = df_trades.dropna(subset=['Date_Parsed'])
+        cal_df = cal_df[(cal_df['Date_Parsed'].dt.year == selected_year) & (cal_df['Date_Parsed'].dt.month == selected_month)]
+        daily_sums = cal_df.groupby(cal_df['Date_Parsed'].dt.day)['P/L_Num'].sum().to_dict()
+        
+    weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    cols = st.columns(7)
+    for i, day_name in enumerate(weekdays):
+        cols[i].markdown(f"<div style='text-align:center; font-weight:bold; font-size:16px;'>{day_name}</div>", unsafe_allow_html=True)
+        
+    cal_matrix = calendar.monthcalendar(selected_year, selected_month)
+    
+    for week in cal_matrix:
+        cols = st.columns(7)
+        for i, day in enumerate(week):
+            with cols[i]:
+                if day == 0:
+                    st.markdown("<div style='height:80px;'></div>", unsafe_allow_html=True)
+                else:
+                    pl = daily_sums.get(day, 0.0)
+                    if pl > 0:
+                        color = "#2ecc71" 
+                        pl_str = f"+${pl:,.2f}"
+                    elif pl < 0:
+                        color = "#e74c3c" 
+                        pl_str = f"-${abs(pl):,.2f}"
+                    else:
+                        color = "gray"
+                        pl_str = "$0.00"
+                        
+                    st.markdown(
+                        f"""
+                        <div style="border: 1px solid rgba(128, 128, 128, 0.3); border-radius: 8px; padding: 10px; margin-bottom: 10px; text-align: center; height: 80px;">
+                            <div style="font-size: 14px; font-weight: bold; color: gray;">{day}</div>
+                            <div style="font-size: 16px; font-weight: bold; color: {color}; margin-top: 5px;">{pl_str}</div>
+                        </div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
 
 # ==========================================
 # TRADE LOG TAB LOGIC (GOOGLE SHEETS)
