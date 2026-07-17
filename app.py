@@ -502,6 +502,9 @@ with tabs[-1]:
         
         df_trades = pd.read_csv(csv_url)
         
+        # Stop loading data exactly at Column Q (the 17th column)
+        df_trades = df_trades.iloc[:, :17]
+        
         st.dataframe(df_trades, use_container_width=True)
         
         if st.button("🔄 Refresh Trade Log"):
