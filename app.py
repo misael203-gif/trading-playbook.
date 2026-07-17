@@ -3,6 +3,7 @@ import streamlit.components.v1 as components
 import math
 import yfinance as yf
 import pandas as pd
+from streamlit_gsheets import GSheetsConnection
 
 # Set mobile-friendly page config
 st.set_page_config(page_title="Trading Playbook", layout="wide")
@@ -47,8 +48,8 @@ if not tickers:
     st.info("Enter a ticker symbol above to start building your playbook.")
     st.stop()
 
-# Create tabs for each ticker + Comparison + Risk Monitor
-tabs = st.tabs(tickers + ["🏆 Compare Best Setups", "🛡️ Risk & Drawdown Monitor"])
+# Create tabs for each ticker + Comparison + Risk Monitor + Trade Log
+tabs = st.tabs(tickers + ["🏆 Compare Best Setups", "🛡️ Risk & Drawdown Monitor", "📝 Trade Log"])
 
 def get_live_price(t):
     try:
@@ -402,7 +403,7 @@ for i, ticker in enumerate(tickers):
 # ==========================================
 # COMPARISON TAB LOGIC
 # ==========================================
-with tabs[-2]:
+with tabs[-3]:
     st.header("🏆 Morning Leaderboard")
     st.write("Compare setups side-by-side. Focus on low floats and high relative volume to spot maximum volatility.")
     
@@ -432,7 +433,7 @@ with tabs[-2]:
 # ==========================================
 # RISK & DRAWDOWN MONITOR TAB LOGIC
 # ==========================================
-with tabs[-1]:
+with tabs[-2]:
     st.header("🛡️ 6-Month Account Survival Dashboard")
     st.write("Track metrics to preserve your capital over a six-month trading horizon.")
     
@@ -453,7 +454,7 @@ with tabs[-1]:
     with col_in1:
         daily_pl = st.number_input("Current Intraday P/L ($)", value=0.00, step=10.00, format="%.2f", help="Enter negative values for losses (e.g., -140.00)")
     with col_in2:
-        weekly_losses = st.number_input("Accumulated Weekly Loss Before Today ($)", min_value=0.00, value=0.00, step=10.00, format="%.2f", help="Sum of previous days' losses for this week.")
+        weekly_pl = st.number_input("Current Weekly P/L ($)", value=0.00, step=10.00, format="%.2f", help="Total P/L for the week, including today.")
     
     st.markdown("---")
     
@@ -462,8 +463,7 @@ with tabs[-1]:
     max_weekly_drawdown = 350.00
     
     remaining_daily = max_daily_drawdown + daily_pl if daily_pl < 0 else max_daily_drawdown
-    total_weekly_loss = weekly_losses + (abs(daily_pl) if daily_pl < 0 else 0)
-    remaining_weekly = max_weekly_drawdown - total_weekly_loss
+    remaining_weekly = max_weekly_drawdown + weekly_pl if weekly_pl < 0 else max_weekly_drawdown
     
     st.markdown("### 📉 Remaining Drawdown Buffers")
     col_m1, col_m2 = st.columns(2)
@@ -471,16 +471,16 @@ with tabs[-1]:
     # Daily Breaker Display
     if daily_pl <= -max_daily_drawdown:
         col_m1.metric("Daily Limit Status", f"${daily_pl:,.2f}", "⚠️ BREACHED", delta_color="inverse")
-        st.error("🛑 **DAILY LOSS LIMIT BREACHED:** Shut down your platform immediately. Do not attempt a 3rd trade to revenge-trade.")
+        st.error("🛑 **DAILY LOSS LIMIT BREACHED:** Shut down your platform immediately. Do not attempt another trade.")
     else:
-        col_m1.metric("Daily Room Left", f"${remaining_daily:,.2f}", f"Current P/L: ${daily_pl:,.2f}")
+        col_m1.metric("Daily Room Left", f"${remaining_daily:,.2f}", f"Current Daily P/L: ${daily_pl:,.2f}")
         
     # Weekly Breaker Display
-    if total_weekly_loss >= max_weekly_drawdown:
-        col_m2.metric("Weekly Limit Status", f"-${total_weekly_loss:,.2f}", "🚨 SYSTEM LOCKED", delta_color="inverse")
+    if weekly_pl <= -max_weekly_drawdown:
+        col_m2.metric("Weekly Limit Status", f"${weekly_pl:,.2f}", "🚨 SYSTEM LOCKED", delta_color="inverse")
         st.error("🛑 **WEEKLY DRAWDOWN CIRCUIT BREAKER HIT:** Market context is toxic for your playbook. You are locked out until next Monday.")
     else:
-        col_m2.metric("Weekly Room Left", f"${remaining_weekly:,.2f}", f"Total Loss: -${total_weekly_loss:,.2f}")
+        col_m2.metric("Weekly Room Left", f"${remaining_weekly:,.2f}", f"Current Weekly P/L: ${weekly_pl:,.2f}")
 
     # Explicit Self-Assessment Checklist
     st.markdown("---")
@@ -488,3 +488,31 @@ with tabs[-1]:
     st.checkbox("I am executing outlays below $466 and utilizing strict 15% stops.")
     st.checkbox("I am refusing to average down on standard setups that go against my entry point.")
     st.checkbox("I am taking partial profits between 20% and 30% instead of holding for micro-cap home runs.")
+
+# ==========================================
+# TRADE LOG TAB LOGIC (GOOGLE SHEETS)
+# ==========================================
+with tabs[-1]:
+    st.header("📝 Google Sheets Trade Log")
+    
+    try:
+        # Create a connection to Google Sheets
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        
+        # Paste your Google Sheet URL here. 
+        # Note: The sheet's sharing settings must be set to "Anyone with the link can view"
+        sheet_url = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE"
+        
+        # Read the data into a Pandas DataFrame
+        df_trades = conn.read(spreadsheet=sheet_url)
+        
+        # Display as an interactive dataframe
+        st.dataframe(df_trades, use_container_width=True)
+        
+        # Optional: Add a refresh button
+        if st.button("🔄 Refresh Trade Log"):
+            st.cache_data.clear()
+            st.rerun()
+            
+    except Exception as e:
+        st.error("Could not connect to Google Sheets. Verify your URL and sharing permissions.")
