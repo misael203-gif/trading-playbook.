@@ -47,8 +47,8 @@ if not tickers:
     st.info("Enter a ticker symbol above to start building your playbook.")
     st.stop()
 
-# Create tabs for each ticker + 1 comparison tab
-tabs = st.tabs(tickers + ["🏆 Compare Best Setups"])
+# Create tabs for each ticker + Comparison + Risk Monitor
+tabs = st.tabs(tickers + ["🏆 Compare Best Setups", "🛡️ Risk & Drawdown Monitor"])
 
 def get_live_price(t):
     try:
@@ -378,14 +378,20 @@ for i, ticker in enumerate(tickers):
         st.markdown("---")
 
         st.subheader("Playbook Risk Check")
-        stop_loss = st.number_input("Planned Stop Loss ($)", min_value=0.0001, value=share_price * 0.95, step=0.01, format="%.4f", key=f"sl_{ticker}")
+        stop_loss = st.number_input("Planned Stop Loss ($)", min_value=0.0001, value=share_price * 0.85, step=0.01, format="%.4f", key=f"sl_{ticker}")
         risk_per_share = share_price - stop_loss
 
         if risk_per_share > 0:
             target_price = share_price + (2 * risk_per_share)
             total_risk = shares * risk_per_share
-            st.write(f"**Strict 2:1 Target:** ${target_price:,.4f}")
+            st.write(f"**Strict 2:1 Target (30.00% minimum):** ${target_price:,.4f}")
             st.write(f"**Total Capital at Risk:** ${total_risk:,.2f}")
+            
+            # Warn if rule parameters broken
+            if cash_outlay > 466.00:
+                st.error("🛑 Playbook Rule Broken: Cash outlay exceeds your strict $466 limit.")
+            if total_risk > 70.00:
+                st.error("🛑 Playbook Rule Broken: Dollar amount at risk exceeds your strict $70 max loss per trade.")
             if selling_price < target_price:
                 st.warning(f"⚠️ Your Selling Price is below your strict 2:1 target.")
             if score < 60:
@@ -396,7 +402,7 @@ for i, ticker in enumerate(tickers):
 # ==========================================
 # COMPARISON TAB LOGIC
 # ==========================================
-with tabs[-1]:
+with tabs[-2]:
     st.header("🏆 Morning Leaderboard")
     st.write("Compare setups side-by-side. Focus on low floats and high relative volume to spot maximum volatility.")
     
@@ -422,3 +428,63 @@ with tabs[-1]:
             st.error("🛑 **No Play:** No tickers passed minimum guidelines.")
     else:
         st.info("Fill out your ticker checklists to update the master grid.")
+
+# ==========================================
+# RISK & DRAWDOWN MONITOR TAB LOGIC
+# ==========================================
+with tabs[-1]:
+    st.header("🛡️ 6-Month Account Survival Dashboard")
+    st.write("Track metrics to preserve your capital over a six-month trading horizon.")
+    
+    # Static Rules Sidebar/Section
+    st.markdown("### 📌 Rule Mandates")
+    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+    col_r1.metric("Starting Balance", "$3,500")
+    col_r2.metric("Max Size Per Trade", "$466", "13.3% of Account")
+    col_r3.metric("Max Loss Per Trade", "$70", "15% Position Stop")
+    col_r4.metric("Max Daily Trades", "3")
+    
+    st.markdown("---")
+    
+    # Active Inputs for Real-Time Monitoring
+    st.markdown("### 📊 Active P/L Trackers")
+    col_in1, col_in2 = st.columns(2)
+    
+    with col_in1:
+        daily_pl = st.number_input("Current Intraday P/L ($)", value=0.00, step=10.00, format="%.2f", help="Enter negative values for losses (e.g., -140.00)")
+    with col_in2:
+        weekly_losses = st.number_input("Accumulated Weekly Loss Before Today ($)", min_value=0.00, value=0.00, step=10.00, format="%.2f", help="Sum of previous days' losses for this week.")
+    
+    st.markdown("---")
+    
+    # Drawdown Calculations
+    max_daily_drawdown = 140.00
+    max_weekly_drawdown = 350.00
+    
+    remaining_daily = max_daily_drawdown + daily_pl if daily_pl < 0 else max_daily_drawdown
+    total_weekly_loss = weekly_losses + (abs(daily_pl) if daily_pl < 0 else 0)
+    remaining_weekly = max_weekly_drawdown - total_weekly_loss
+    
+    st.markdown("### 📉 Remaining Drawdown Buffers")
+    col_m1, col_m2 = st.columns(2)
+    
+    # Daily Breaker Display
+    if daily_pl <= -max_daily_drawdown:
+        col_m1.metric("Daily Limit Status", f"${daily_pl:,.2f}", "⚠️ BREACHED", delta_color="inverse")
+        st.error("🛑 **DAILY LOSS LIMIT BREACHED:** Shut down your platform immediately. Do not attempt a 3rd trade to revenge-trade.")
+    else:
+        col_m1.metric("Daily Room Left", f"${remaining_daily:,.2f}", f"Current P/L: ${daily_pl:,.2f}")
+        
+    # Weekly Breaker Display
+    if total_weekly_loss >= max_weekly_drawdown:
+        col_m2.metric("Weekly Limit Status", f"-${total_weekly_loss:,.2f}", "🚨 SYSTEM LOCKED", delta_color="inverse")
+        st.error("🛑 **WEEKLY DRAWDOWN CIRCUIT BREAKER HIT:** Market context is toxic for your playbook. You are locked out until next Monday.")
+    else:
+        col_m2.metric("Weekly Room Left", f"${remaining_weekly:,.2f}", f"Total Loss: -${total_weekly_loss:,.2f}")
+
+    # Explicit Self-Assessment Checklist
+    st.markdown("---")
+    st.markdown("### 🧠 Self-Discipline Checklist")
+    st.checkbox("I am executing outlays below $466 and utilizing strict 15% stops.")
+    st.checkbox("I am refusing to average down on standard setups that go against my entry point.")
+    st.checkbox("I am taking partial profits between 20% and 30% instead of holding for micro-cap home runs.")
