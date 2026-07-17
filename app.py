@@ -505,6 +505,16 @@ with tabs[-2]:
         avg_win_time = win_df['Duration_Min'].mean() if (not win_df.empty and 'Duration_Min' in win_df.columns) else 0.0
         avg_lose_time = lose_df['Duration_Min'].mean() if (not lose_df.empty and 'Duration_Min' in lose_df.columns) else 0.0
         
+        def fmt_time(m_total):
+            if pd.isna(m_total) or m_total == 0: return "0 Minutes"
+            h = int(m_total // 60)
+            m = int(m_total % 60)
+            h_label = "Hour" if h == 1 else "Hours"
+            m_label = "Minute" if m == 1 else "Minutes"
+            if h > 0:
+                return f"{h} {h_label} and {m} {m_label}"
+            return f"{m} {m_label}"
+        
         if not win_df.empty:
             best_idx = win_df['P/L_Num'].idxmax()
             biggest_win = win_df.loc[best_idx, 'P/L_Num']
@@ -526,13 +536,13 @@ with tabs[-2]:
         
         c1.metric("Biggest Winner", f"${biggest_win:,.2f}", win_delta_1)
         c2.metric("Average Winner", f"${avg_win:,.2f}", win_delta_2)
-        c3.metric("Average Hold Time", f"{int(avg_win_time)}m {int((avg_win_time%1)*60)}s")
+        c3.metric("Average Hold Time", fmt_time(avg_win_time))
         
         st.markdown("##### 🔴 Losers")
         c1, c2, c3 = st.columns(3)
         c1.metric("Biggest Loser", f"${biggest_lose:,.2f}", f"{biggest_lose_pct:,.2f}%")
         c2.metric("Average Loser", f"${avg_lose:,.2f}", f"{avg_lose_pct:,.2f}%")
-        c3.metric("Average Hold Time", f"{int(avg_lose_time)}m {int((avg_lose_time%1)*60)}s")
+        c3.metric("Average Hold Time", fmt_time(avg_lose_time))
         
         st.markdown("---")
 
