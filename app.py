@@ -499,12 +499,11 @@ with tabs[-1]:
         # Create a connection to Google Sheets
         conn = st.connection("gsheets", type=GSheetsConnection)
         
-        # Paste your Google Sheet URL here. 
-        # Note: The sheet's sharing settings must be set to "Anyone with the link can view"
-        sheet_url = "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE"
+        # Your specific Google Sheet URL
+        sheet_url = "https://docs.google.com/spreadsheets/d/1Xvlszud1_o6F-SWEfP_ckcL9yWnEs40Hm75DYgnwY7o/edit?usp=sharing"
         
-        # Read the data into a Pandas DataFrame
-        df_trades = conn.read(spreadsheet=sheet_url)
+        # Read the data into a Pandas DataFrame from the specific "Trades" tab
+        df_trades = conn.read(spreadsheet=sheet_url, worksheet="Trades")
         
         # Display as an interactive dataframe
         st.dataframe(df_trades, use_container_width=True)
