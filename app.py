@@ -6,6 +6,7 @@ import pandas as pd
 import datetime
 import time
 import calendar
+import re
 
 # Set mobile-friendly page config
 st.set_page_config(page_title="Trading Playbook", layout="wide")
@@ -24,28 +25,45 @@ def format_number(num):
 # ==========================================
 # MASTER DATA LOADER (Runs in background)
 # ==========================================
-@st.cache_data(ttl=60) # Caches data for 60 seconds to keep app blazing fast while staying real-time
+@st.cache_data(ttl=60) 
 def load_trade_data():
     try:
         sheet_id = "1Xvlszud1_o6F-SWEfP_ckcL9yWnEs40Hm75DYgnwY7o"
         tab_id = "1620057635" 
         
-        # Adding a time-based cache-buster to the URL forces Google to send a fresh file
         csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={tab_id}&t={int(time.time())}"
         
         df = pd.read_csv(csv_url)
         df = df.iloc[:, :17] # Stop loading at Column Q
         
-        # Clean the Date and P/L columns so the computer can do math on them
         if 'Date' in df.columns:
-            # Strip out any invisible spaces or non-breaking characters
             clean_date = df['Date'].astype(str).str.replace(r'\xa0', ' ', regex=True).str.strip()
             df['Date_Parsed'] = pd.to_datetime(clean_date, errors='coerce')
             
         if 'P/L' in df.columns:
-            # Strip out dollar signs, commas, and handle negative accounting formats
             clean_pl = df['P/L'].astype(str).str.replace(r'[\$,\s]', '', regex=True).str.replace(r'^\((.*)\)$', r'-\1', regex=True)
             df['P/L_Num'] = pd.to_numeric(clean_pl, errors='coerce').fillna(0.0)
+            
+        if 'Gain/Loss %' in df.columns:
+            clean_pct = df['Gain/Loss %'].astype(str).str.replace(r'%', '', regex=True).str.replace(r',', '', regex=True).str.strip()
+            df['Gain_Pct_Num'] = pd.to_numeric(clean_pct, errors='coerce').fillna(0.0)
+            
+        if 'Duration' in df.columns:
+            def parse_dur(x):
+                x = str(x).strip().lower()
+                if x == 'nan' or x == '': return 0.0
+                if ':' in x:
+                    parts = x.split(':')
+                    if len(parts) == 3: return int(parts[0])*60 + int(parts[1]) + float(parts[2])/60
+                    elif len(parts) == 2: return int(parts[0]) + float(parts[1])/60
+                h = re.search(r'(\d+)\s*h', x)
+                m = re.search(r'(\d+)\s*m', x)
+                s = re.search(r'(\d+)\s*s', x)
+                hours = int(h.group(1)) if h else 0
+                minutes = int(m.group(1)) if m else 0
+                seconds = int(s.group(1)) if s else 0
+                return hours * 60 + minutes + seconds / 60
+            df['Duration_Min'] = df['Duration'].apply(parse_dur)
             
         return df
     except Exception as e:
@@ -69,7 +87,6 @@ if 'scores_data' not in st.session_state:
 if 'ticker_stats' not in st.session_state:
     st.session_state.ticker_stats = {}
 
-# Cleanup memory: Remove any tickers from session state that are no longer in the search box
 keys_to_delete_scores = [k for k in st.session_state.scores_data.keys() if k not in tickers]
 for k in keys_to_delete_scores:
     del st.session_state.scores_data[k]
@@ -78,12 +95,10 @@ keys_to_delete_stats = [k for k in st.session_state.ticker_stats.keys() if k not
 for k in keys_to_delete_stats:
     del st.session_state.ticker_stats[k]
 
-# Stop execution if no tickers are entered to keep the screen clean
 if not tickers:
     st.info("Enter a ticker symbol above to start building your playbook.")
     st.stop()
 
-# Create tabs for each ticker + Comparison + Risk Monitor + Calendar + Trade Log
 tabs = st.tabs(tickers + ["🏆 Compare Best Setups", "🛡️ Risk & Drawdown Monitor", "📅 P/L Calendar", "📝 Trade Log"])
 
 def get_live_price(t):
@@ -94,7 +109,6 @@ def get_live_price(t):
     except:
         pass
 
-# Render Playbook for each ticker in its respective tab
 for i, ticker in enumerate(tickers):
     if ticker not in st.session_state.ticker_stats:
         st.session_state.ticker_stats[ticker] = {
@@ -105,9 +119,6 @@ for i, ticker in enumerate(tickers):
         st.session_state[f"manual_float_{ticker}"] = ""
 
     with tabs[i]:
-        # ==========================================
-        # SECTION 1: LIVE TRADINGVIEW CHARTS
-        # ==========================================
         st.header(f"1. Live Charts: {ticker}")
 
         st.subheader("Daily Chart")
@@ -165,11 +176,7 @@ for i, ticker in enumerate(tickers):
 
         st.markdown("---")
 
-        # ==========================================
-        # SECTION 2: LIVE STOCK STATS
-        # ==========================================
         st.header("2. Live Stock Stats")
-
         with st.expander(f"📉 Click to Show/Hide Live Stats for {ticker}", expanded=False):
             if st.button(f"📊 Fetch / Refresh Stats for {ticker}", key=f"fetch_{ticker}"):
                 with st.spinner(f"Pulling market data for {ticker}..."):
@@ -244,10 +251,6 @@ for i, ticker in enumerate(tickers):
                         st.error("Data fetch failed. Verify ticker symbol.")
 
         st.markdown("---")
-
-        # ==========================================
-        # SECTION 3: TRADER DISCIPLINE CHECK
-        # ==========================================
         st.header("3. Discipline Check")
         distraction_check = st.radio(
             "Is this stock the active volume leader, or a slow distraction?",
@@ -264,10 +267,6 @@ for i, ticker in enumerate(tickers):
             continue
 
         st.markdown("---")
-
-        # ==========================================
-        # SECTION 4: PLAYBOOK CRITERIA CHECKLIST
-        # ==========================================
         st.header("4. Playbook Criteria Checklist")
         col1, col2 = st.columns(2)
 
@@ -319,10 +318,6 @@ for i, ticker in enumerate(tickers):
         }
 
         st.markdown("---")
-
-        # ==========================================
-        # SECTION 5: STOCK PROFIT CALCULATOR
-        # ==========================================
         st.header("5. Stock Profit Calculator")
         if f"share_price_{ticker}" not in st.session_state: st.session_state[f"share_price_{ticker}"] = 3.50
 
@@ -408,7 +403,6 @@ with tabs[-3]:
     st.header("🛡️ 6-Month Account Survival Dashboard")
     st.write("Track metrics to preserve your capital over a six-month trading horizon.")
     
-    # Static Rules Sidebar/Section
     st.markdown("### 📌 Rule Mandates")
     col_r1, col_r2, col_r3, col_r4 = st.columns(4)
     col_r1.metric("Starting Balance", "$3,500")
@@ -417,8 +411,6 @@ with tabs[-3]:
     col_r4.metric("Max Daily Trades", "3")
     
     st.markdown("---")
-    
-    # 🗓️ LIVE CALENDAR SYNC
     st.markdown("### 🗓️ Sync with Trade Log")
     st.write("Select the dates below to automatically calculate your Intraday and Weekly P/L from your Google Sheet.")
     
@@ -447,7 +439,6 @@ with tabs[-3]:
     col_in2.metric("Current Weekly P/L", f"${weekly_pl:,.2f}")
     
     st.markdown("---")
-    
     max_daily_drawdown = 140.00
     max_weekly_drawdown = 350.00
     
@@ -490,12 +481,64 @@ with tabs[-2]:
         
     st.markdown("---")
     
+    # ----------------------------------------
+    # Monthly Stats Calculation
+    # ----------------------------------------
     daily_sums = {}
+    cal_df = pd.DataFrame()
+    
     if not df_trades.empty and 'Date_Parsed' in df_trades.columns:
         cal_df = df_trades.dropna(subset=['Date_Parsed'])
         cal_df = cal_df[(cal_df['Date_Parsed'].dt.year == selected_year) & (cal_df['Date_Parsed'].dt.month == selected_month)]
         daily_sums = cal_df.groupby(cal_df['Date_Parsed'].dt.day)['P/L_Num'].sum().to_dict()
+
+    if not cal_df.empty:
+        win_df = cal_df[cal_df['P/L_Num'] > 0]
+        lose_df = cal_df[cal_df['P/L_Num'] < 0]
         
+        avg_win = win_df['P/L_Num'].mean() if not win_df.empty else 0.0
+        avg_lose = lose_df['P/L_Num'].mean() if not lose_df.empty else 0.0
+        
+        avg_win_pct = win_df['Gain_Pct_Num'].mean() if (not win_df.empty and 'Gain_Pct_Num' in win_df.columns) else 0.0
+        avg_lose_pct = lose_df['Gain_Pct_Num'].mean() if (not lose_df.empty and 'Gain_Pct_Num' in lose_df.columns) else 0.0
+        
+        avg_win_time = win_df['Duration_Min'].mean() if (not win_df.empty and 'Duration_Min' in win_df.columns) else 0.0
+        avg_lose_time = lose_df['Duration_Min'].mean() if (not lose_df.empty and 'Duration_Min' in lose_df.columns) else 0.0
+        
+        if not win_df.empty:
+            best_idx = win_df['P/L_Num'].idxmax()
+            biggest_win = win_df.loc[best_idx, 'P/L_Num']
+            biggest_win_pct = win_df.loc[best_idx, 'Gain_Pct_Num'] if 'Gain_Pct_Num' in win_df.columns else 0.0
+        else:
+            biggest_win, biggest_win_pct = 0.0, 0.0
+            
+        if not lose_df.empty:
+            worst_idx = lose_df['P/L_Num'].idxmin()
+            biggest_lose = lose_df.loc[worst_idx, 'P/L_Num']
+            biggest_lose_pct = lose_df.loc[worst_idx, 'Gain_Pct_Num'] if 'Gain_Pct_Num' in lose_df.columns else 0.0
+        else:
+            biggest_lose, biggest_lose_pct = 0.0, 0.0
+
+        st.markdown("##### 🟢 Winners")
+        c1, c2, c3 = st.columns(3)
+        win_delta_1 = f"+{biggest_win_pct:,.2f}%" if biggest_win_pct > 0 else f"{biggest_win_pct:,.2f}%"
+        win_delta_2 = f"+{avg_win_pct:,.2f}%" if avg_win_pct > 0 else f"{avg_win_pct:,.2f}%"
+        
+        c1.metric("Biggest Winner", f"${biggest_win:,.2f}", win_delta_1)
+        c2.metric("Average Winner", f"${avg_win:,.2f}", win_delta_2)
+        c3.metric("Average Hold Time", f"{int(avg_win_time)}m {int((avg_win_time%1)*60)}s")
+        
+        st.markdown("##### 🔴 Losers")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Biggest Loser", f"${biggest_lose:,.2f}", f"{biggest_lose_pct:,.2f}%")
+        c2.metric("Average Loser", f"${avg_lose:,.2f}", f"{avg_lose_pct:,.2f}%")
+        c3.metric("Average Hold Time", f"{int(avg_lose_time)}m {int((avg_lose_time%1)*60)}s")
+        
+        st.markdown("---")
+
+    # ----------------------------------------
+    # Calendar Grid Renderer
+    # ----------------------------------------
     weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     cols = st.columns(7)
     for i, day_name in enumerate(weekdays):
@@ -538,13 +581,11 @@ with tabs[-1]:
     st.header("📝 Google Sheets Trade Log")
     
     if not df_trades.empty:
-        # Drop the background math columns so the table looks clean
-        clean_df = df_trades.drop(columns=['Date_Parsed', 'P/L_Num'], errors='ignore')
+        clean_df = df_trades.drop(columns=['Date_Parsed', 'P/L_Num', 'Gain_Pct_Num', 'Duration_Min'], errors='ignore')
         st.dataframe(clean_df, use_container_width=True)
     else:
         st.error("Could not load data from Google Sheets. Check your link and permissions.")
         
-    # Button clears the 60-second cache and forces an immediate redownload
     if st.button("🔄 Refresh Trade Log"):
         st.cache_data.clear()
         st.rerun()
