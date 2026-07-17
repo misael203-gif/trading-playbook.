@@ -4,6 +4,7 @@ import math
 import yfinance as yf
 import pandas as pd
 import datetime
+import time
 
 # Set mobile-friendly page config
 st.set_page_config(page_title="Trading Playbook", layout="wide")
@@ -27,14 +28,18 @@ def load_trade_data():
     try:
         sheet_id = "1Xvlszud1_o6F-SWEfP_ckcL9yWnEs40Hm75DYgnwY7o"
         tab_id = "1620057635" 
-        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={tab_id}"
+        
+        # Adding a time-based cache-buster to the URL forces Google to send a fresh file
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={tab_id}&t={int(time.time())}"
         
         df = pd.read_csv(csv_url)
         df = df.iloc[:, :17] # Stop loading at Column Q
         
         # Clean the Date and P/L columns so the computer can do math on them
         if 'Date' in df.columns:
-            df['Date_Parsed'] = pd.to_datetime(df['Date'], errors='coerce')
+            # Strip out any invisible spaces or non-breaking characters
+            clean_date = df['Date'].astype(str).str.replace(r'\xa0', ' ', regex=True).str.strip()
+            df['Date_Parsed'] = pd.to_datetime(clean_date, errors='coerce')
             
         if 'P/L' in df.columns:
             # Strip out dollar signs, commas, and handle negative accounting formats
