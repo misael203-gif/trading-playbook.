@@ -3,6 +3,7 @@ import streamlit.components.v1 as components
 import math
 import yfinance as yf
 import pandas as pd
+import datetime
 
 # Set mobile-friendly page config
 st.set_page_config(page_title="Trading Playbook", layout="wide")
@@ -17,6 +18,35 @@ def format_number(num):
         else: return f"{num:.2f}"
     except:
         return "N/A"
+
+# ==========================================
+# MASTER DATA LOADER (Runs in background)
+# ==========================================
+@st.cache_data(ttl=60) # Caches data for 60 seconds to keep app blazing fast while staying real-time
+def load_trade_data():
+    try:
+        sheet_id = "1Xvlszud1_o6F-SWEfP_ckcL9yWnEs40Hm75DYgnwY7o"
+        tab_id = "1620057635" 
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={tab_id}"
+        
+        df = pd.read_csv(csv_url)
+        df = df.iloc[:, :17] # Stop loading at Column Q
+        
+        # Clean the Date and P/L columns so the computer can do math on them
+        if 'Date' in df.columns:
+            df['Date_Parsed'] = pd.to_datetime(df['Date'], errors='coerce')
+            
+        if 'P/L' in df.columns:
+            # Strip out dollar signs, commas, and handle negative accounting formats
+            clean_pl = df['P/L'].astype(str).str.replace(r'[\$,\s]', '', regex=True).str.replace(r'^\((.*)\)$', r'-\1', regex=True)
+            df['P/L_Num'] = pd.to_numeric(clean_pl, errors='coerce').fillna(0.0)
+            
+        return df
+    except Exception as e:
+        return pd.DataFrame()
+
+# Load the data once for the whole app
+df_trades = load_trade_data()
 
 st.title("⚡ Momentum Trading Playbook")
 st.write("Pre-Market Checklist & Risk Calculator")
@@ -60,17 +90,11 @@ def get_live_price(t):
 
 # Render Playbook for each ticker in its respective tab
 for i, ticker in enumerate(tickers):
-    # Initialize default blank stats for the leaderboard and input sync if not fetched yet
     if ticker not in st.session_state.ticker_stats:
         st.session_state.ticker_stats[ticker] = {
-            "Float": "N/A",
-            "Volume": "N/A",
-            "Short %": "N/A",
-            "52w High": "N/A",
-            "VWAP": "N/A"
+            "Float": "N/A", "Volume": "N/A", "Short %": "N/A", "52w High": "N/A", "VWAP": "N/A"
         }
     
-    # Initialize manual input override key if it doesn't exist
     if f"manual_float_{ticker}" not in st.session_state:
         st.session_state[f"manual_float_{ticker}"] = ""
 
@@ -80,7 +104,6 @@ for i, ticker in enumerate(tickers):
         # ==========================================
         st.header(f"1. Live Charts: {ticker}")
 
-        # --- Daily Chart ---
         st.subheader("Daily Chart")
         tv_daily_html = f"""
         <div class="tradingview-widget-container" style="height: 550px; width: 100%;">
@@ -105,7 +128,6 @@ for i, ticker in enumerate(tickers):
         """
         components.html(tv_daily_html, height=550)
 
-        # --- Intraday Chart ---
         st.subheader("Intraday Chart")
         timeframe = st.radio("Select Intraday Timeframe", ["1 Minute", "5 Minute", "15 Minute", "30 Minute"], horizontal=True, key=f"tf_{ticker}")
 
@@ -162,29 +184,19 @@ for i, ticker in enumerate(tickers):
                         
                         float_val = info.get('floatShares', info.get('sharesOutstanding', 'N/A'))
                         float_str = format_number(float_val)
-                        
-                        # Direct autofill to session state variable linked to the text box
                         st.session_state[f"manual_float_{ticker}"] = float_str
                         
                         high_52 = info.get('fiftyTwoWeekHigh', 0)
                         if c_price and high_52:
-                            if c_price >= high_52:
-                                dist_52h = f"${high_52:.2f} (AT HIGH)"
-                            else:
-                                diff_pct = ((high_52 - c_price) / high_52) * 100
-                                dist_52h = f"${high_52:.2f} (-{diff_pct:.0f}%)"
-                        else:
-                            dist_52h = "N/A"
+                            if c_price >= high_52: dist_52h = f"${high_52:.2f} (AT HIGH)"
+                            else: dist_52h = f"${high_52:.2f} (-{((high_52 - c_price) / high_52) * 100:.0f}%)"
+                        else: dist_52h = "N/A"
 
                         low_52 = info.get('fiftyTwoWeekLow', 0)
                         if c_price and low_52:
-                            if c_price <= low_52:
-                                dist_52l = f"${low_52:.2f} (AT LOW)"
-                            else:
-                                diff_pct = ((c_price - low_52) / low_52) * 100
-                                dist_52l = f"${low_52:.2f} (+{diff_pct:.0f}%)"
-                        else:
-                            dist_52l = "N/A"
+                            if c_price <= low_52: dist_52l = f"${low_52:.2f} (AT LOW)"
+                            else: dist_52l = f"${low_52:.2f} (+{((c_price - low_52) / low_52) * 100:.0f}%)"
+                        else: dist_52l = "N/A"
                             
                         shares_short = format_number(info.get('sharesShort'))
                         short_pct = info.get('shortPercentOfFloat')
@@ -195,19 +207,13 @@ for i, ticker in enumerate(tickers):
                             hist['Typical'] = (hist['High'] + hist['Low'] + hist['Close']) / 3
                             vwap = (hist['Typical'] * hist['Volume']).sum() / hist['Volume'].sum()
                             above_vwap = "Yes 🟢" if c_price > vwap else "No 🔴"
-                        else:
-                            above_vwap = "N/A"
+                        else: above_vwap = "N/A"
 
-                        # Save crucial metrics for Leaderboard visibility
                         st.session_state.ticker_stats[ticker] = {
-                            "Float": float_str,
-                            "Volume": vol,
-                            "Short %": short_pct_str,
-                            "52w High": dist_52h,
-                            "VWAP": above_vwap
+                            "Float": float_str, "Volume": vol, "Short %": short_pct_str, 
+                            "52w High": dist_52h, "VWAP": above_vwap
                         }
 
-                        # Display Dashboard Grids
                         c1, c2, c3 = st.columns(3)
                         c1.metric("Open", op)
                         c2.metric("Day's Range", day_range)
@@ -246,9 +252,7 @@ for i, ticker in enumerate(tickers):
         if distraction_check == "💤 Illiquid Former Runner (Boring/Consolidating)":
             st.error("🛑 Playbook is locked for this ticker.")
             st.session_state.scores_data[ticker] = {
-                "Score": 0, 
-                "Grade": "LOCK", 
-                "Status": "❌ Locked",
+                "Score": 0, "Grade": "LOCK", "Status": "❌ Locked",
                 "Float": "N/A", "Volume": "N/A", "Short %": "N/A", "52w High": "N/A", "VWAP": "N/A"
             }
             continue
@@ -259,7 +263,6 @@ for i, ticker in enumerate(tickers):
         # SECTION 4: PLAYBOOK CRITERIA CHECKLIST
         # ==========================================
         st.header("4. Playbook Criteria Checklist")
-
         col1, col2 = st.columns(2)
 
         with col1:
@@ -273,32 +276,17 @@ for i, ticker in enumerate(tickers):
 
         with col2:
             st.subheader("Quality of the setup?")
-            float_category = st.selectbox(
-                "Float Category",
-                [
-                    "Micro Float (< 1M) [10 pts]",
-                    "Low Float (1M - 10M) [8 pts]",
-                    "Medium Float (10M - 50M) [6 pts]",
-                    "High Float (50M+) [4 pts]"
-                ],
-                key=f"fcat_{ticker}"
-            )
-            
-            # The value parameter is bound directly to st.session_state variable handled in Section 2
+            float_category = st.selectbox("Float Category", ["Micro Float (< 1M) [10 pts]", "Low Float (1M - 10M) [8 pts]", "Medium Float (10M - 50M) [6 pts]", "High Float (50M+) [4 pts]"], key=f"fcat_{ticker}")
             setup_float = st.text_input("Actual Float Size", key=f"manual_float_{ticker}")
             support_area = st.text_input("Support area (for risk)", key=f"sarea_{ticker}")
             rating_catalyst = st.number_input("Rating of Catalyst (1-5)", min_value=1, max_value=5, value=3, key=f"rcat_{ticker}")
 
-        # Calculate Score (Balanced to max 100 points)
         score = 0
-        
-        # Float Category Points
         if "Micro" in float_category: score += 10
         elif "Low" in float_category: score += 8
         elif "Medium" in float_category: score += 6
         elif "High" in float_category: score += 4
 
-        # Yes/No Check Points
         if up_10 == "Y": score += 10
         if unusual_vol == "Y": score += 20 
         if former_runner == "Y": score += 10
@@ -306,8 +294,7 @@ for i, ticker in enumerate(tickers):
         if dollar_break == "Y": score += 10
         if clear_support == "Y": score += 10
         
-        # Rating Points
-        score += (rating_catalyst * 4) # Max 20 points
+        score += (rating_catalyst * 4)
 
         if score >= 90: grade, color, status = "A-Setup", "#2ecc71", "✅ Prime"
         elif score >= 75: grade, color, status = "B-Setup", "#f1c40f", "⚠️ Viable"
@@ -316,11 +303,8 @@ for i, ticker in enumerate(tickers):
 
         st.markdown(f"### Score: <span style='color:{color}'>{score} / 100 ({grade})</span>", unsafe_allow_html=True)
         
-        # Combine Score + Fetched Stats for the Leaderboard mapping
         st.session_state.scores_data[ticker] = {
-            "Score": score,
-            "Grade": grade,
-            "Status": status,
+            "Score": score, "Grade": grade, "Status": status,
             "Float": st.session_state.ticker_stats[ticker]["Float"],
             "Volume": st.session_state.ticker_stats[ticker]["Volume"],
             "Short %": st.session_state.ticker_stats[ticker]["Short %"],
@@ -334,9 +318,7 @@ for i, ticker in enumerate(tickers):
         # SECTION 5: STOCK PROFIT CALCULATOR
         # ==========================================
         st.header("5. Stock Profit Calculator")
-
-        if f"share_price_{ticker}" not in st.session_state:
-            st.session_state[f"share_price_{ticker}"] = 3.50
+        if f"share_price_{ticker}" not in st.session_state: st.session_state[f"share_price_{ticker}"] = 3.50
 
         st.subheader("BUY")
         col_price, col_btn = st.columns([2, 1])
@@ -370,13 +352,10 @@ for i, ticker in enumerate(tickers):
         percent_return = (net_profit / cash_outlay) * 100 if cash_outlay > 0 else 0.0
 
         col_out1, col_out2 = st.columns(2)
-        with col_out1:
-            st.metric("Net Profit", f"${net_profit:,.2f}")
-        with col_out2:
-            st.metric("% of Return", f"{percent_return:,.2f}%")
+        with col_out1: st.metric("Net Profit", f"${net_profit:,.2f}")
+        with col_out2: st.metric("% of Return", f"{percent_return:,.2f}%")
 
         st.markdown("---")
-
         st.subheader("Playbook Risk Check")
         stop_loss = st.number_input("Planned Stop Loss ($)", min_value=0.0001, value=share_price * 0.85, step=0.01, format="%.4f", key=f"sl_{ticker}")
         risk_per_share = share_price - stop_loss
@@ -387,17 +366,11 @@ for i, ticker in enumerate(tickers):
             st.write(f"**Strict 2:1 Target (30.00% minimum):** ${target_price:,.4f}")
             st.write(f"**Total Capital at Risk:** ${total_risk:,.2f}")
             
-            # Warn if rule parameters broken
-            if cash_outlay > 466.00:
-                st.error("🛑 Playbook Rule Broken: Cash outlay exceeds your strict $466 limit.")
-            if total_risk > 70.00:
-                st.error("🛑 Playbook Rule Broken: Dollar amount at risk exceeds your strict $70 max loss per trade.")
-            if selling_price < target_price:
-                st.warning(f"⚠️ Your Selling Price is below your strict 2:1 target.")
-            if score < 60:
-                st.error("🛑 Playbook Rule Broken: This is an F-Setup.")
-        else:
-            st.error("Stop Loss must be lower than the Share Price.")
+            if cash_outlay > 466.00: st.error("🛑 Playbook Rule Broken: Cash outlay exceeds your strict $466 limit.")
+            if total_risk > 70.00: st.error("🛑 Playbook Rule Broken: Dollar amount at risk exceeds your strict $70 max loss per trade.")
+            if selling_price < target_price: st.warning(f"⚠️ Your Selling Price is below your strict 2:1 target.")
+            if score < 60: st.error("🛑 Playbook Rule Broken: This is an F-Setup.")
+        else: st.error("Stop Loss must be lower than the Share Price.")
 
 # ==========================================
 # COMPARISON TAB LOGIC
@@ -410,22 +383,15 @@ with tabs[-3]:
         df = pd.DataFrame.from_dict(st.session_state.scores_data, orient='index')
         df.index.name = 'Ticker'
         df.reset_index(inplace=True)
-        
-        # Sort by Playbook Score first
         df = df.sort_values(by='Score', ascending=False).reset_index(drop=True)
-        
-        # Display the complete matrix
         st.table(df)
         
         top_ticker = df.iloc[0]['Ticker']
         top_score = df.iloc[0]['Score']
         
-        if top_score >= 75:
-            st.success(f"🚀 **Top Focus:** {top_ticker} leads with a playbook score of {top_score}.")
-        elif top_score >= 60:
-            st.warning(f"⚠️ **Caution:** {top_ticker} is your highest scoring ticker, but it's high risk ({top_score} pts).")
-        else:
-            st.error("🛑 **No Play:** No tickers passed minimum guidelines.")
+        if top_score >= 75: st.success(f"🚀 **Top Focus:** {top_ticker} leads with a playbook score of {top_score}.")
+        elif top_score >= 60: st.warning(f"⚠️ **Caution:** {top_ticker} is your highest scoring ticker, but it's high risk ({top_score} pts).")
+        else: st.error("🛑 **No Play:** No tickers passed minimum guidelines.")
     else:
         st.info("Fill out your ticker checklists to update the master grid.")
 
@@ -446,14 +412,35 @@ with tabs[-2]:
     
     st.markdown("---")
     
-    # Active Inputs for Real-Time Monitoring
-    st.markdown("### 📊 Active P/L Trackers")
-    col_in1, col_in2 = st.columns(2)
+    # 🗓️ LIVE CALENDAR SYNC
+    st.markdown("### 🗓️ Sync with Trade Log")
+    st.write("Select the dates below to automatically calculate your Intraday and Weekly P/L from your Google Sheet.")
     
-    with col_in1:
-        daily_pl = st.number_input("Current Intraday P/L ($)", value=0.00, step=10.00, format="%.2f", help="Enter negative values for losses (e.g., -140.00)")
-    with col_in2:
-        weekly_pl = st.number_input("Current Weekly P/L ($)", value=0.00, step=10.00, format="%.2f", help="Total P/L for the week, including today.")
+    # Default to Monday of the current week for easy tracking
+    today = datetime.date.today()
+    monday = today - datetime.timedelta(days=today.weekday())
+    
+    col_cal1, col_cal2 = st.columns(2)
+    with col_cal1:
+        start_of_week = st.date_input("Start of Trading Week", value=monday)
+    with col_cal2:
+        current_day = st.date_input("Today's Date", value=today)
+
+    # Automatically calculate real-time P/L from the Google Sheet
+    daily_pl = 0.0
+    weekly_pl = 0.0
+    
+    if not df_trades.empty and 'Date_Parsed' in df_trades.columns and 'P/L_Num' in df_trades.columns:
+        mask_week = (df_trades['Date_Parsed'].dt.date >= start_of_week) & (df_trades['Date_Parsed'].dt.date <= current_day)
+        mask_today = (df_trades['Date_Parsed'].dt.date == current_day)
+        
+        weekly_pl = float(df_trades[mask_week]['P/L_Num'].sum())
+        daily_pl = float(df_trades[mask_today]['P/L_Num'].sum())
+
+    st.markdown("### 📊 Active P/L Trackers (Live Synced)")
+    col_in1, col_in2 = st.columns(2)
+    col_in1.metric("Current Intraday P/L", f"${daily_pl:,.2f}")
+    col_in2.metric("Current Weekly P/L", f"${weekly_pl:,.2f}")
     
     st.markdown("---")
     
@@ -494,21 +481,14 @@ with tabs[-2]:
 with tabs[-1]:
     st.header("📝 Google Sheets Trade Log")
     
-    try:
-        sheet_id = "1Xvlszud1_o6F-SWEfP_ckcL9yWnEs40Hm75DYgnwY7o"
-        tab_id = "1620057635" 
+    if not df_trades.empty:
+        # Drop the background math columns so the table looks clean
+        clean_df = df_trades.drop(columns=['Date_Parsed', 'P/L_Num'], errors='ignore')
+        st.dataframe(clean_df, use_container_width=True)
+    else:
+        st.error("Could not load data from Google Sheets. Check your link and permissions.")
         
-        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={tab_id}"
-        
-        df_trades = pd.read_csv(csv_url)
-        
-        # Stop loading data exactly at Column Q (the 17th column)
-        df_trades = df_trades.iloc[:, :17]
-        
-        st.dataframe(df_trades, use_container_width=True)
-        
-        if st.button("🔄 Refresh Trade Log"):
-            st.rerun()
-            
-    except Exception as e:
-        st.error(f"The exact error is: {e}")
+    # Button clears the 60-second cache and forces an immediate redownload
+    if st.button("🔄 Refresh Trade Log"):
+        st.cache_data.clear()
+        st.rerun()
