@@ -64,6 +64,19 @@ def load_trade_data():
                 seconds = int(s.group(1)) if s else 0
                 return hours * 60 + minutes + seconds / 60
             df['Duration_Min'] = df['Duration'].apply(parse_dur)
+
+        # Parse sizing and entry to calculate strictly broken risk rules mathematically
+        if 'Position Size' in df.columns:
+            clean_pos = df['Position Size'].astype(str).str.replace(r',', '', regex=True)
+            df['Pos_Num'] = pd.to_numeric(clean_pos, errors='coerce').fillna(0.0)
+        else:
+            df['Pos_Num'] = 0.0
+            
+        if 'Entry' in df.columns:
+            clean_entry = df['Entry'].astype(str).str.replace(r'[\$,]', '', regex=True)
+            df['Entry_Num'] = pd.to_numeric(clean_entry, errors='coerce').fillna(0.0)
+        else:
+            df['Entry_Num'] = 0.0
             
         return df
     except Exception as e:
@@ -461,6 +474,56 @@ with tabs[-3]:
         col_m2.metric("Weekly Room Left", f"${remaining_weekly:,.2f}", f"Current Weekly P/L: ${weekly_pl:,.2f}")
 
     st.markdown("---")
+    st.markdown("### 📅 Weekly Performance & Discipline Review")
+    
+    week_data = []
+    for i in range(7):
+        day_date = start_of_week + datetime.timedelta(days=i)
+        if not df_trades.empty and 'Date_Parsed' in df_trades.columns:
+            day_df = df_trades[df_trades['Date_Parsed'].dt.date == day_date]
+            if not day_df.empty:
+                d_pl = day_df['P/L_Num'].sum()
+                trade_count = len(day_df)
+                
+                size_breaches = (day_df['Pos_Num'] * day_df['Entry_Num'] > 466.01).sum()
+                loss_breaches = (day_df['P/L_Num'] < -70.01).sum()
+                
+                violations = []
+                if size_breaches > 0: violations.append("Size > $466")
+                if loss_breaches > 0: violations.append("Loss > $70")
+                if trade_count > 3: violations.append("Overtrading (>3)")
+                
+                rule_status = "❌ " + ", ".join(violations) if violations else "✅ Respected"
+                
+                pl_formatted = f"+${d_pl:,.2f}" if d_pl > 0 else f"-${abs(d_pl):,.2f}" if d_pl < 0 else "$0.00"
+                
+                week_data.append({
+                    "Date": day_date.strftime("%a, %b %d"),
+                    "P/L": pl_formatted,
+                    "Trades Taken": trade_count,
+                    "Risk Discipline": rule_status
+                })
+                
+    if week_data:
+        review_df = pd.DataFrame(week_data)
+        
+        def style_table(df):
+            styles = pd.DataFrame('', index=df.index, columns=df.columns)
+            pl_nums = df['P/L'].str.replace('$', '', regex=False).str.replace('+', '', regex=False).str.replace(',', '', regex=False).astype(float)
+            styles.loc[pl_nums > 0, 'P/L'] = 'color: #2ecc71;'
+            styles.loc[pl_nums < 0, 'P/L'] = 'color: #e74c3c;'
+            
+            styles.loc[df['Trades Taken'] > 3, 'Trades Taken'] = 'color: #e74c3c; font-weight: bold;'
+            
+            styles.loc[df['Risk Discipline'].str.contains('❌', na=False), 'Risk Discipline'] = 'color: #e74c3c; font-weight: bold;'
+            styles.loc[df['Risk Discipline'].str.contains('✅', na=False), 'Risk Discipline'] = 'color: #2ecc71;'
+            return styles
+            
+        st.dataframe(review_df.style.apply(style_table, axis=None), use_container_width=True)
+    else:
+        st.info("No trades logged for this week yet.")
+
+    st.markdown("---")
     st.markdown("### 🧠 Self-Discipline Checklist")
     st.checkbox("I am executing outlays below $466 and utilizing strict 15% stops.")
     st.checkbox("I am refusing to average down on standard setups that go against my entry point.")
@@ -591,7 +654,7 @@ with tabs[-1]:
     st.header("📝 Google Sheets Trade Log")
     
     if not df_trades.empty:
-        clean_df = df_trades.drop(columns=['Date_Parsed', 'P/L_Num', 'Gain_Pct_Num', 'Duration_Min'], errors='ignore')
+        clean_df = df_trades.drop(columns=['Date_Parsed', 'P/L_Num', 'Gain_Pct_Num', 'Duration_Min', 'Pos_Num', 'Entry_Num'], errors='ignore')
         st.dataframe(clean_df, use_container_width=True)
     else:
         st.error("Could not load data from Google Sheets. Check your link and permissions.")
