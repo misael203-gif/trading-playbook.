@@ -3,7 +3,6 @@ import streamlit.components.v1 as components
 import math
 import yfinance as yf
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
 
 # Set mobile-friendly page config
 st.set_page_config(page_title="Trading Playbook", layout="wide")
@@ -496,21 +495,16 @@ with tabs[-1]:
     st.header("📝 Google Sheets Trade Log")
     
     try:
-        # Create a connection to Google Sheets
-        conn = st.connection("gsheets", type=GSheetsConnection)
+        sheet_id = "1Xvlszud1_o6F-SWEfP_ckcL9yWnEs40Hm75DYgnwY7o"
+        tab_id = "1620057635" 
         
-        # Your specific Google Sheet URL
-        sheet_url = "https://docs.google.com/spreadsheets/d/1Xvlszud1_o6F-SWEfP_ckcL9yWnEs40Hm75DYgnwY7o/edit?usp=sharing"
+        csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={tab_id}"
         
-        # Read the data into a Pandas DataFrame from the specific "Trades" tab
-        df_trades = conn.read(spreadsheet=sheet_url, worksheet="Trades")
+        df_trades = pd.read_csv(csv_url)
         
-        # Display as an interactive dataframe
         st.dataframe(df_trades, use_container_width=True)
         
-        # Optional: Add a refresh button
         if st.button("🔄 Refresh Trade Log"):
-            st.cache_data.clear()
             st.rerun()
             
     except Exception as e:
