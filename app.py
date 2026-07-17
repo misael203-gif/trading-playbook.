@@ -482,11 +482,11 @@ with tabs[-2]:
     st.header("📅 Daily P/L Calendar")
     
     today = datetime.date.today()
-    col_y, col_m = st.columns(2)
-    with col_y:
-        selected_year = st.selectbox("Select Year", range(2023, 2035), index=range(2023, 2035).index(today.year))
+    col_m, col_y = st.columns(2)
     with col_m:
         selected_month = st.selectbox("Select Month", range(1, 13), index=today.month - 1, format_func=lambda x: calendar.month_name[x])
+    with col_y:
+        selected_year = st.selectbox("Select Year", range(2023, 2035), index=range(2023, 2035).index(today.year))
         
     st.markdown("---")
     
